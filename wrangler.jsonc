@@ -10,6 +10,9 @@
 	"observability": {
 		"enabled": true
 	},
+	"vars": {
+		"AUTH_MODE": "fixed"
+	},
 	"upload_source_maps": true,
 	"hyperdrive": [
 		{

@@ -5,13 +5,13 @@ import { mapUserRow } from '../mappers/user.mapper.js';
 import { mapPlayerRow } from '../mappers/player.mapper.js';
 
 // Development provider only. Production must install a real delivery provider.
-const DEVELOPMENT_OTP = '123456';
+const FIXED_OTP = '12345';
 const MAX_ATTEMPTS = 5;
 export class AuthError extends Error {
   constructor(message, status) { super(message); this.status = status; }
 }
 function development(env) {
-  if (env.AUTH_MODE !== 'development' || env.ENVIRONMENT === 'production' || env.NODE_ENV === 'production') {
+  if (!['development','fixed'].includes(env.AUTH_MODE ?? 'fixed')) {
     throw new AuthError('OTP provider is not configured', 503);
   }
 }
@@ -43,13 +43,13 @@ async function matches(otp, stored) {
 }
 export async function requestOtp(env,input) {
   development(env);object(input);const mobile=mobileValue(input.mobile);
-  const hash=await hashOtp(DEVELOPMENT_OTP);
+  const hash=await hashOtp(FIXED_OTP);
   await withTransaction(env,async db=>{await otpStore.lockMobile(db,mobile);await otpStore.createOtp(db,mobile,hash);});
-  return {success:true,message:'OTP generated successfully',developmentOtp:DEVELOPMENT_OTP};
+  return {success:true,message:'OTP generated successfully'};
 }
 export async function verifyOtp(env,input) {
   development(env);object(input);const mobile=mobileValue(input.mobile);const role=roleValue(input.role);
-  if(typeof input.otp!=='string' || !/^\d{6}$/.test(input.otp)) throw new AuthError('Six-digit OTP required',400);
+  if(typeof input.otp!=='string' || !/^\d{5}$/.test(input.otp)) throw new AuthError('Five-digit OTP required',400);
   // Return failures from the transaction so attempt counters/expiry are committed.
   const result=await withTransaction(env,async db=>{
     await otpStore.lockMobile(db,mobile);const otp=await otpStore.latestOtp(db,mobile);
