@@ -4,13 +4,16 @@
   "private": true,
   "scripts": {
     "deploy": "wrangler deploy",
-    "dev": "wrangler dev",
-    "start": "wrangler dev",
+    "dev": "wrangler dev --env-file .dev.vars --var AUTH_MODE:development",
+    "start": "wrangler dev --env-file .dev.vars --var AUTH_MODE:development",
     "test": "vitest"
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "^1.0.0",
     "vitest": "~4.1.0",
     "wrangler": "^4.130.0"
+  },
+  "dependencies": {
+    "pg": "^8.23.0"
   }
 }

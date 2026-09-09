@@ -1,0 +1,6 @@
+export async function list(db,user){return (await db.query('SELECT * FROM notifications WHERE recipient_id=$1 ORDER BY created_at DESC',[user])).rows;}
+export async function countUnread(db,user){return (await db.query('SELECT COUNT(*)::int AS count FROM notifications WHERE recipient_id=$1 AND is_read=false',[user])).rows[0].count;}
+export async function byId(db,id){return (await db.query('SELECT * FROM notifications WHERE id=$1',[id])).rows[0];}
+export async function markRead(db,id,user){return (await db.query('UPDATE notifications SET is_read=true,read_at=COALESCE(read_at,NOW()) WHERE id=$1 AND recipient_id=$2 RETURNING *',[id,user])).rows[0];}
+export async function markAll(db,user){return (await db.query('UPDATE notifications SET is_read=true,read_at=COALESCE(read_at,NOW()) WHERE recipient_id=$1 AND is_read=false',[user])).rowCount;}
+export async function create(db,n){return (await db.query('INSERT INTO notifications (recipient_id,recipient_role,type,title,message,link,tournament_id,category_id,match_id,dedupe_key) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *',[n.recipientId,n.recipientRole,n.type,n.title,n.message,n.link??null,n.tournamentId??null,n.categoryId??null,n.matchId??null,n.dedupeKey??null])).rows[0];}

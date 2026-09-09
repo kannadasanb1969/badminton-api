@@ -1,0 +1,4 @@
+const ALLOWED=new Set(['http://localhost:5173','http://127.0.0.1:5173']);
+export function corsHeaders(request){const origin=request.headers.get('Origin');const h=new Headers();if(ALLOWED.has(origin)){h.set('Access-Control-Allow-Origin',origin);h.set('Access-Control-Allow-Methods','GET, POST, PUT, PATCH, DELETE, OPTIONS');h.set('Access-Control-Allow-Headers','Content-Type, Authorization');h.set('Vary','Origin');}return h;}
+export function corsResponse(response,request){const h=new Headers(response.headers);for(const [k,v] of corsHeaders(request))h.set(k,v);return new Response(response.body,{status:response.status,statusText:response.statusText,headers:h});}
+export function preflight(request){return new Response(null,{status:204,headers:corsHeaders(request)});}

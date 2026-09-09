@@ -1,0 +1,12 @@
+export async function finalMatch(db,t,c){return (await db.query("SELECT * FROM matches WHERE tournament_id=$1 AND category_id=$2 AND status='COMPLETED' ORDER BY round_number DESC,match_number DESC LIMIT 1",[t,c])).rows[0];}
+export async function result(db,t,c){return (await db.query('SELECT * FROM results WHERE tournament_id=$1 AND category_id=$2',[t,c])).rows[0];}
+export async function resultById(db,id){return (await db.query('SELECT * FROM results WHERE id=$1',[id])).rows[0];}
+export async function resultsBy(db,field,value){if(!['tournament_id','category_id'].includes(field))throw new Error('invalid filter');return (await db.query(`SELECT * FROM results WHERE ${field}=$1 ORDER BY created_at DESC`,[value])).rows;}
+export async function insertResult(db,t,c,e,w,wt,r,rt,at){return (await db.query('INSERT INTO results (id,tournament_id,category_id,event_type,winner_participant_id,winner_participant_type,runner_up_participant_id,runner_up_participant_type,completed_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *',[crypto.randomUUID(),t,c,e,w,wt,r,rt,at])).rows[0];}
+export async function medals(db,t,c){return (await db.query('SELECT * FROM medal_history WHERE tournament_id=$1 AND category_id=$2 ORDER BY achieved_at',[t,c])).rows;}
+export async function insertMedal(db,p,g,t,c,e,pos,med,typ){return (await db.query('INSERT INTO medal_history (id,player_id,guest_player_id,tournament_id,category_id,event_type,position,medal_type,player_type,achieved_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW()) ON CONFLICT DO NOTHING RETURNING *',[crypto.randomUUID(),p,g,t,c,e,pos,med,typ])).rows[0];}
+export async function medalById(db,id){return (await db.query('SELECT * FROM medal_history WHERE id=$1',[id])).rows[0];}
+export async function medalsBy(db,field,value){if(!['player_id','tournament_id','category_id'].includes(field))throw new Error('invalid filter');return (await db.query(`SELECT * FROM medal_history WHERE ${field}=$1 ORDER BY achieved_at DESC`,[value])).rows;}
+export async function allMedals(db){return (await db.query('SELECT * FROM medal_history ORDER BY achieved_at DESC')).rows;}
+export async function teamMembers(db,id){const r=(await db.query('SELECT player1_id,player1_type,player2_id,player2_type FROM teams WHERE id=$1',[id])).rows[0];return r?[{id:r.player1_id,type:r.player1_type},{id:r.player2_id,type:r.player2_type}].filter(x=>x.id):[];}
+export async function allResults(db){return (await db.query('SELECT * FROM results ORDER BY created_at DESC')).rows;}

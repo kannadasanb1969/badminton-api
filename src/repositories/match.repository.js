@@ -1,0 +1,6 @@
+export async function all(db, q={}){return (await db.query('SELECT * FROM matches WHERE ($1::text IS NULL OR fixture_id=$1) AND ($2::text IS NULL OR tournament_id=$2) ORDER BY round_number,match_number',[q.fixtureId??null,q.tournamentId??null])).rows;}
+export async function byId(db,id,lock=false){return (await db.query(`SELECT * FROM matches WHERE id=$1${lock?' FOR UPDATE':''}`,[id])).rows[0];}
+export async function history(db,id){return (await db.query('SELECT * FROM match_score_history WHERE match_id=$1 ORDER BY created_at,id',[id])).rows;}
+export async function updateStart(db,id){return (await db.query("UPDATE matches SET status='LIVE',started_at=COALESCE(started_at,NOW()),updated_at=NOW() WHERE id=$1 RETURNING *",[id])).rows[0];}
+export async function updateScore(db,id,a,b,status,winner){return (await db.query("UPDATE matches SET participant1_score=$2,participant2_score=$3,status=$4::varchar,winner_id=$5,completed_at=CASE WHEN $4::varchar='COMPLETED' THEN NOW() ELSE completed_at END,updated_at=NOW() WHERE id=$1 RETURNING *",[id,a,b,status,winner])).rows[0];}
+export async function addHistory(db,id,a,b,action,user){return (await db.query('INSERT INTO match_score_history (match_id,participant1_score,participant2_score,action,changed_by) VALUES ($1,$2,$3,$4,$5) RETURNING *',[id,a,b,action,user])).rows[0];}
