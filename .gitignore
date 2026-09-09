@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Logs
 
 logs
@@ -165,3 +166,8 @@ dist
 .env*
 !.env.example
 .wrangler/
+=======
+.DS_Store
+node_modules/
+.DS_Store
+>>>>>>> e803bfd977ff0772bd0abdab86f12f5194d691a3
