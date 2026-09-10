@@ -61,12 +61,12 @@ async function nested(db,id,input){
     await repo.replaceRules(db,id,input.generalRules.map(r=>text(r,'rule')));
   }
 }
-async function mapped(db,row){if(!row)throw new TournamentError('Tournament not found',404);return mapTournament(row,await repo.categories(db,row.id),await repo.rules(db,row.id));}
+async function mapped(db,row){if(!row)throw new TournamentError('Tournament not found',404);const counts=await repo.registrationCounts(db,[row.id]);const cs=await repo.categories(db,row.id);const categories=cs.map(c=>{const x=counts.categories.get(c.id);return {...c,registeredPlayerCount:x?.registered_player_count??0,registeredEntryCount:x?.registered_entry_count??0,registeredTeamCount:x?.registered_team_count??0};});const t=counts.tournaments.get(row.id);return {...mapTournament(row,categories,await repo.rules(db,row.id)),registeredPlayerCount:t?.registered_player_count??0,registeredEntryCount:t?.registered_entry_count??0,registeredTeamCount:t?.registered_team_count??0};}
 // TODO: Replace client-supplied actor IDs with verified request/session identity.
 // Database role checks are a temporary phase-4 mechanism, not authentication.
 async function actor(db,id){const user=typeof id==='string'?await findUser(db,id):null;if(!user||!user.is_active)throw new TournamentError('Authorization required',403);return user;}
 async function owner(db,row,input){const user=await actor(db,input.adminUserId??input.organizerId);if(user.role!=='ADMIN'&&(user.role!=='ORGANIZER'||user.id!==row.organizer_id))throw new TournamentError('Not authorized for this tournament',403);return user;}
-export const listTournaments=(env,filters={})=>withDatabase(env,async db=>{const rows=await repo.findAll(db,filters);const result=[];for(const row of rows)result.push(await mapped(db,row));return result;});
+export const listTournaments=(env,filters={})=>withDatabase(env,async db=>{const rows=await repo.findAll(db,filters);if(!rows.length)return [];const counts=await repo.registrationCounts(db,rows.map(r=>r.id));return Promise.all(rows.map(async row=>{const cs=await repo.categories(db,row.id);const categories=cs.map(c=>{const x=counts.categories.get(c.id);return {...c,registeredPlayerCount:x?.registered_player_count??0,registeredEntryCount:x?.registered_entry_count??0,registeredTeamCount:x?.registered_team_count??0};});const t=counts.tournaments.get(row.id);return {...mapTournament(row,categories,await repo.rules(db,row.id)),registeredPlayerCount:t?.registered_player_count??0,registeredEntryCount:t?.registered_entry_count??0,registeredTeamCount:t?.registered_team_count??0};}));});
 export const getTournament=(env,id)=>withDatabase(env,async db=>mapped(db,await repo.findById(db,id)));
 export const getTournamentByCode=(env,code)=>withDatabase(env,async db=>mapped(db,await repo.findByCode(db,code)));
 export async function createTournament(env,input){const data=validate(input);return withTransaction(env,async db=>{

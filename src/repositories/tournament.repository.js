@@ -25,6 +25,19 @@ export async function categories(db,id) {
 export async function rules(db,id) {
   return (await db.query('SELECT * FROM tournament_rules WHERE tournament_id=$1 ORDER BY sort_order,id',[id])).rows;
 }
+export async function registrationCounts(db,tournamentIds) {
+  if(!tournamentIds.length)return {tournaments:new Map(),categories:new Map()};
+  const params=[tournamentIds];
+  const categories=await db.query(`WITH active AS (SELECT * FROM registrations WHERE tournament_id=ANY($1::text[]) AND status IN ('PENDING','REGISTERED','CONFIRMED')),
+    participants AS (SELECT tournament_id,category_id,'PLAYER:'||player_id AS participant FROM active UNION ALL SELECT tournament_id,category_id,CASE WHEN partner_type='FULL' THEN 'PLAYER:'||partner_id ELSE 'GUEST:'||partner_id END FROM active WHERE event_type='DOUBLES' AND partner_id IS NOT NULL)
+    entries AS (SELECT tournament_id,category_id,COUNT(*)::int registered_entry_count,COUNT(*) FILTER (WHERE event_type='DOUBLES' AND partner_id IS NOT NULL)::int registered_team_count FROM active GROUP BY tournament_id,category_id), people AS (SELECT tournament_id,category_id,COUNT(DISTINCT participant)::int registered_player_count FROM participants GROUP BY tournament_id,category_id)
+    SELECT e.tournament_id,e.category_id,e.registered_entry_count,e.registered_team_count,COALESCE(p.registered_player_count,0)::int registered_player_count FROM entries e LEFT JOIN people p USING (tournament_id,category_id)`,params);
+  const tournaments=await db.query(`WITH active AS (SELECT * FROM registrations WHERE tournament_id=ANY($1::text[]) AND status IN ('PENDING','REGISTERED','CONFIRMED')),
+    participants AS (SELECT tournament_id,'PLAYER:'||player_id AS participant FROM active UNION ALL SELECT tournament_id,CASE WHEN partner_type='FULL' THEN 'PLAYER:'||partner_id ELSE 'GUEST:'||partner_id END FROM active WHERE event_type='DOUBLES' AND partner_id IS NOT NULL)
+    entries AS (SELECT tournament_id,COUNT(*)::int registered_entry_count,COUNT(*) FILTER (WHERE event_type='DOUBLES' AND partner_id IS NOT NULL)::int registered_team_count FROM active GROUP BY tournament_id), people AS (SELECT tournament_id,COUNT(DISTINCT participant)::int registered_player_count FROM participants GROUP BY tournament_id)
+    SELECT e.tournament_id,e.registered_entry_count,e.registered_team_count,COALESCE(p.registered_player_count,0)::int registered_player_count FROM entries e LEFT JOIN people p USING (tournament_id)`,params);
+  return {categories:new Map(categories.rows.map(r=>[r.category_id,r])),tournaments:new Map(tournaments.rows.map(r=>[r.tournament_id,r]))};
+}
 export async function insert(db,data,code,organizer) {
   const columns=[...fields,'tournament_code','organizer_id','organizer_mobile','organizer_name'];
   return (await db.query(`INSERT INTO tournaments (${columns.join(',')}) VALUES (${columns.map((_,i)=>'$'+(i+1)).join(',')}) RETURNING *`,[...fields.map(k=>data[k]),code,organizer.id,organizer.mobile,organizer.display_name])).rows[0];

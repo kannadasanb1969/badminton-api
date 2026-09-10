@@ -6,5 +6,7 @@ function mapped(row) {
     key.endsWith('_date') && value ? (value instanceof Date ? value.toISOString().slice(0,10) : String(value).slice(0,10)) : value]));
 }
 export function mapTournament(row, categories = [], rules = []) {
-  return { ...mapped(row), endDate: null, registrationStartDate: null, entryFee: null, categories: categories.map(mapped), generalRules: rules.map(rule => rule.rule_text) };
+  const counts={registeredPlayerCount:0,registeredEntryCount:0,registeredTeamCount:0};
+  const mappedCategories=categories.map(c=>({...mapped(c),registeredPlayerCount:c.registeredPlayerCount??0,registeredEntryCount:c.registeredEntryCount??0,registeredTeamCount:c.registeredTeamCount??0}));
+  return { ...mapped(row), ...counts, endDate: null, registrationStartDate: null, entryFee: null, categories: mappedCategories, generalRules: rules.map(rule => rule.rule_text) };
 }
