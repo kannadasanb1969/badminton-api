@@ -91,9 +91,10 @@ export function transitionTournament(env,id,action,input){object(input);return w
   const reason=action==='reject'&&input.reason!=null?text(input.reason,'reason'):null;
   const out=await repo.transition(db,id,action,user.id,reason);if(action==='approve'||action==='reject'){const title=action==='approve'?'Tournament approved':'Tournament rejected';const verb=action==='approve'?'approved':'rejected';await emit(db,{recipientId:row.organizer_id,recipientRole:'ORGANIZER',type:`TOURNAMENT_${action.toUpperCase()}`,title,message:`Your tournament ${row.name} has been ${verb}.`,tournamentId:id,dedupeKey:`TOURNAMENT_${action}:${id}`});}return mapped(db,out);
 });}
-export function closeCategoryRegistration(env,tournamentId,categoryId,input={}){object(input);return withTransaction(env,async db=>{
+export function closeCategoryRegistration(env,tournamentId,categoryId,identity){return withTransaction(env,async db=>{
   const row=await repo.findById(db,tournamentId,true);if(!row)throw new TournamentError('Tournament not found',404);
-  await owner(db,row,input);
+  if(!identity)throw new TournamentError('Authentication required',401);
+  const user=await actor(db,identity.sub);if(user.role!=='ADMIN'&&(user.role!=='ORGANIZER'||user.id!==row.organizer_id))throw new TournamentError('Not authorized for this tournament',403);
   const categoryRow=(await repo.categories(db,tournamentId)).find(c=>c.id===categoryId);if(!categoryRow)throw new TournamentError('Category not found',404);
   if(categoryRow.registration_phase==='CLOSED')return mapped(db,row);
   await repo.closeCategory(db,tournamentId,categoryId);return mapped(db,row);

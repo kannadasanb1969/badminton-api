@@ -1,7 +1,10 @@
 import * as service from '../services/tournament.service.js';
 import {successResponse,errorResponse} from '../utils/response.js';
+import {verifyAccessToken} from '../utils/auth-token.js';
 async function body(request){try{return await request.json();}catch{throw new service.TournamentError('Valid JSON required');}}
 export async function handleTournamentRoutes(request,env){try{
+  const bearer=request.headers.get('Authorization')?.match(/^Bearer\s+(.+)$/i)?.[1];
+  const identity=bearer?await verifyAccessToken(env,bearer):null;
   const url=new URL(request.url);let parts;try{parts=url.pathname.replace(/\/$/,'').split('/').slice(3).map(decodeURIComponent);}catch{throw new service.TournamentError('Invalid URL encoding');}
   if(parts.length===0){
     if(request.method==='GET')return successResponse(await service.listTournaments(env,Object.fromEntries(url.searchParams)));
@@ -15,7 +18,7 @@ export async function handleTournamentRoutes(request,env){try{
   }else if(parts.length===2&&['submit','approve','reject','publish'].includes(parts[1])){
     if(request.method==='POST')return successResponse(await service.transitionTournament(env,parts[0],parts[1],await body(request)));
   }else if(parts.length===4&&parts[1]==='categories'&&parts[3]==='close'){
-    if(request.method==='POST')return successResponse(await service.closeCategoryRegistration(env,parts[0],parts[2],await body(request)));
+    if(request.method==='POST')return successResponse(await service.closeCategoryRegistration(env,parts[0],parts[2],identity),200);
   }else return errorResponse('API endpoint not found',404);
   return errorResponse('Method not allowed',405);
 }catch(error){
