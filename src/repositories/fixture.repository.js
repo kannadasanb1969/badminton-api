@@ -14,3 +14,4 @@ export async function fixtureParticipants(db,id) { return (await db.query('SELEC
 export async function fixtureMatches(db,id) { return (await db.query('SELECT * FROM matches WHERE fixture_id=$1 ORDER BY round_number,match_number',[id])).rows; }
 export async function listFixtures(db,filters={}) { return (await db.query('SELECT * FROM fixtures WHERE ($1::text IS NULL OR tournament_id=$1) AND ($2::text IS NULL OR category_id=$2) ORDER BY created_at DESC',[filters.tournamentId??null,filters.categoryId??null])).rows; }
 export async function findFixture(db,id) { return (await db.query('SELECT * FROM fixtures WHERE id=$1',[id])).rows[0]; }
+export async function publishFixture(db,id,userId) { return (await db.query("UPDATE fixtures SET status='PUBLISHED',published_by=$2,published_at=NOW(),updated_at=NOW() WHERE id=$1 AND status='DRAFT' RETURNING *",[id,userId])).rows[0]; }
