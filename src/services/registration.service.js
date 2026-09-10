@@ -24,7 +24,8 @@ export async function createRegistration(env,input,identity){
   if(!decision.eligible){if(decision.reasons.some(r=>r.code==='REGISTRATION_CLOSED'))throw new RegistrationError('Registration is closed for this category',409,'REGISTRATION_CLOSED');throw new RegistrationError('Registration is not eligible',409,'NOT_ELIGIBLE',decision.reasons);}
   const code='REG'+(BigInt(await repo.nextNumber(db))+1n).toString().padStart(6,'0');
   // Partner fields suffice; team_id stays null until Phase 6.
-  const eventType=input.partner?'DOUBLES':'SINGLES';
+  const category=(await repo.context(db,input)).category;
+  const eventType=category.event_type;
   const saved=await repo.insert(db,input,eventType,code);const player=await findPlayer(db,input.playerId);if(player?.user_id)await emit(db,{recipientId:player.user_id,recipientRole:'PLAYER',type:'REGISTRATION_CONFIRMED',title:'Registration confirmed',message:'Your tournament registration was successful.',tournamentId:input.tournamentId,categoryId:input.categoryId,dedupeKey:`REGISTRATION:${saved.id}`});return mapRegistrationRow(saved);
 });}
 export const listRegistrations=(env,filters={})=>withDatabase(env,async db=>(await repo.list(db,filters)).map(mapRegistrationRow));

@@ -39,7 +39,7 @@ function category(input,existing={}){
   const defaults={gender_eligibility:'ANY',min_age:null,max_age:null,max_teams:null,medalists_allowed:true,open_players_allowed:true,beginner_only:false,pure_beginner_only:false,additional_rule_notes:null};
   for(const [k,v] of Object.entries(defaults))if(result[k]===undefined)result[k]=v;
   for(const [key,col] of Object.entries(mapping))if(Object.hasOwn(input,key))result[col]=input[key];
-  result.name=text(result.name,'category name');if(!['SINGLES','DOUBLES','MIXED_DOUBLES'].includes(result.event_type))throw new TournamentError('Invalid eventType');
+  result.name=text(result.name,'category name');if(!['SINGLES','DOUBLES'].includes(result.event_type))throw new TournamentError('eventType must be SINGLES or DOUBLES');
   if(!['MALE','FEMALE','ANY','MIXED'].includes(result.gender_eligibility))throw new TournamentError('Invalid gender eligibility');
   for(const key of ['min_age','max_age','max_teams'])if(result[key]!==null&&(!Number.isInteger(result[key])||result[key]<(key==='max_teams'?1:0)||result[key]>2147483647))throw new TournamentError(`Invalid ${key}`);
   if(result.min_age!==null&&result.max_age!==null&&result.min_age>result.max_age)throw new TournamentError('Invalid age range');

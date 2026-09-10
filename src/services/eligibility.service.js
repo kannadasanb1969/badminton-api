@@ -20,13 +20,9 @@ export async function checkEligibility(db,input) {
   if(category.tournament_id!==tournament.id)add('CATEGORY_NOT_IN_TOURNAMENT','Category does not belong to this tournament');
   const date=value=>value instanceof Date?value.toISOString().slice(0,10):String(value).slice(0,10);
   if((tournament.registration_close_date&&tournament.today>date(tournament.registration_close_date))||category.registration_phase!=='OPEN'||category.registration_closed_at)add('REGISTRATION_CLOSED','Registration has closed or is paused');
-  if(category.event_type==='MIXED_DOUBLES'||category.gender_eligibility==='MIXED'){
-    // TODO: V2 must define mixed-pair eligibility before registrations are enabled.
-    add('EVENT_TYPE_NOT_SUPPORTED','Mixed doubles eligibility is not available in V1');
-  }
-  if(!['SINGLES','DOUBLES','MIXED_DOUBLES'].includes(category.event_type))add('EVENT_TYPE_NOT_SUPPORTED','Unsupported event type');
+  if(!['SINGLES','DOUBLES'].includes(category.event_type))add('EVENT_TYPE_NOT_SUPPORTED','Unsupported event type');
   if(category.event_type==='SINGLES'&&input.partner)throw new RegistrationError('SINGLES cannot include a partner');
-  if(category.event_type!=='SINGLES'&&!input.partner)add('PARTNER_REQUIRED','A doubles partner is required');
+  if(category.event_type==='DOUBLES'&&!input.partner)add('PARTNER_REQUIRED','A doubles partner is required');
   if(input.partner){
     if(!['PLAYER','GUEST'].includes(input.partner.type))throw new RegistrationError('Partner type must be PLAYER or GUEST',400,'INVALID_PARTNER_TYPE');
     if(!partner)throw new RegistrationError('Partner not found',404,'PARTNER_NOT_FOUND');
