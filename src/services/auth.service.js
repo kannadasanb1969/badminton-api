@@ -3,6 +3,7 @@ import * as otpStore from '../repositories/auth.repository.js';
 import * as users from '../repositories/user.repository.js';
 import { mapUserRow } from '../mappers/user.mapper.js';
 import { mapPlayerRow } from '../mappers/player.mapper.js';
+import { issueAccessToken } from '../utils/auth-token.js';
 
 // Development provider only. Production must install a real delivery provider.
 const FIXED_OTP = '12345';
@@ -63,7 +64,7 @@ export async function verifyOtp(env,input) {
     if(!user) user=await users.createPlayerUser(db,mobile);
     await otpStore.setStatus(db,otp.id,'VERIFIED');
     const profiles=role==='PLAYER'?await users.linkedProfiles(db,user.id):[];
-    return {user:mapUserRow(user),playerProfile:profiles.length===1?mapPlayerRow(profiles[0]):null};
+    return {user:mapUserRow(user),playerProfile:profiles.length===1?mapPlayerRow(profiles[0]):null,accessToken:await issueAccessToken(env,user)};
   });
   if(result.error) throw new AuthError(result.error,result.status);
   return result;

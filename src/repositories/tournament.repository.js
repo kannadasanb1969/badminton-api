@@ -38,6 +38,9 @@ export async function saveCategory(db,tournamentId,data) {
   }
   return (await db.query(`INSERT INTO tournament_categories (${categoryFields.join(',')},tournament_id) VALUES (${categoryFields.map((_,i)=>'$'+(i+1)).join(',')},$12) RETURNING *`,[...categoryFields.map(k=>data[k]),tournamentId])).rows[0];
 }
+export async function closeCategory(db,tournamentId,categoryId) {
+  return (await db.query("UPDATE tournament_categories SET registration_phase='CLOSED',registration_closed_at=NOW(),updated_at=NOW() WHERE id=$1 AND tournament_id=$2 AND registration_phase='OPEN' RETURNING *",[categoryId,tournamentId])).rows[0];
+}
 export async function replaceRules(db,id,rules) {
   await db.query('DELETE FROM tournament_rules WHERE tournament_id=$1',[id]);
   for(let i=0;i<rules.length;i++) await db.query('INSERT INTO tournament_rules (tournament_id,rule_text,sort_order) VALUES ($1,$2,$3)',[id,rules[i],i]);

@@ -14,6 +14,8 @@ export async function handleTournamentRoutes(request,env){try{
     // Permanent DELETE is unsupported: tournament history must be retained.
   }else if(parts.length===2&&['submit','approve','reject','publish'].includes(parts[1])){
     if(request.method==='POST')return successResponse(await service.transitionTournament(env,parts[0],parts[1],await body(request)));
+  }else if(parts.length===4&&parts[1]==='categories'&&parts[3]==='close'){
+    if(request.method==='POST')return successResponse(await service.closeCategoryRegistration(env,parts[0],parts[2],await body(request)));
   }else return errorResponse('API endpoint not found',404);
   return errorResponse('Method not allowed',405);
 }catch(error){
