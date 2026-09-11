@@ -36,6 +36,9 @@ function validate(input, existing) {
       throw new GuestPlayerError(`${key} must be a string or null`, 400);
     }
   }
+  if (result.gender !== null && !["MALE", "FEMALE", "OTHER"].includes(result.gender)) {
+    throw new GuestPlayerError("gender must be MALE, FEMALE, OTHER, or null", 400);
+  }
   if (typeof result.regularPlayer !== "boolean") throw new GuestPlayerError("regularPlayer must be a boolean", 400);
   if (result.playingSince !== null && (!Number.isInteger(result.playingSince) || result.playingSince < -2147483648 || result.playingSince > 2147483647)) {
     throw new GuestPlayerError("playingSince must be an integer or null", 400);
@@ -90,4 +93,3 @@ export function updateGuest(env, id, input) {
     return guests.update(db, id, player);
   });
 }
-
