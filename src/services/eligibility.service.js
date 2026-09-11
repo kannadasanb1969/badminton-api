@@ -45,5 +45,7 @@ export async function checkEligibility(db,input) {
   if(category.max_teams!=null&&await repo.countActive(db,category.id)>=category.max_teams)add('CATEGORY_FULL','Category capacity has been reached');
   // No authoritative player skill/classification data exists in these profiles.
   if(category.beginner_only||category.pure_beginner_only||category.open_players_allowed===false)add('ELIGIBILITY_REVIEW_REQUIRED','This category requires a player classification not available in V1');
-  return {eligible:reasons.length===0,reasons};
+  const playerReasons=reasons.filter(r=>r.message.startsWith('Player ')||r.code.startsWith('PLAYER_')||r.code==='ALREADY_REGISTERED');
+  const partnerReasons=reasons.filter(r=>r.message.startsWith('Partner ')||r.code.startsWith('PARTNER_')||r.code==='GUEST_ALREADY_CLAIMED'||r.code==='MEDALIST_NOT_ALLOWED');
+  return {eligible:reasons.length===0,playerEligible:playerReasons.length===0,playerReasons,partnerEligible:partner?partnerReasons.length===0:null,partnerReasons,reasons};
 }
