@@ -11,13 +11,6 @@ export async function insertFixture(db,t,c,format,event,actor,code) { return (aw
 export async function insertParticipant(db,f,id,type,seed,name,code) { return (await db.query('INSERT INTO fixture_participants (fixture_id,participant_id,participant_type,seed_number,display_name,display_code) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',[f,id,type,seed,name,code])).rows[0]; }
 export async function insertMatch(db,f,t,c,n,p1,pt1,p2,pt2,round=1) { return (await db.query("INSERT INTO matches (match_code,fixture_id,tournament_id,category_id,round_number,round_name,match_number,participant1_id,participant1_type,participant2_id,participant2_type,status,winning_points) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'SCHEDULED',NULL) RETURNING *",[`M${f.slice(0,6)}${n}`,f,t,c,round,round===1?'ROUND_1':`ROUND_${round}`,n,p1,pt1,p2,pt2])).rows[0]; }
 export async function linkNextMatch(db,sourceId,nextId,slot) { return (await db.query('UPDATE matches SET next_match_id=$2,next_match_slot=$3,updated_at=NOW() WHERE id=$1 RETURNING *',[sourceId,nextId,slot])).rows[0]; }
-export async function advanceWinner(db,sourceId,winnerId,winnerType) {
-  const source=(await db.query('SELECT next_match_id,next_match_slot FROM matches WHERE id=$1 FOR UPDATE',[sourceId])).rows[0];
-  if(!source?.next_match_id)return null;
-  const column=source.next_match_slot===1?'participant1_id':'participant2_id';
-  const typeColumn=source.next_match_slot===1?'participant1_type':'participant2_type';
-  return (await db.query(`UPDATE matches SET ${column}=$2,${typeColumn}=$3,updated_at=NOW() WHERE id=$1 AND status='SCHEDULED' RETURNING *`,[source.next_match_id,winnerId,winnerType])).rows[0];
-}
 export async function fixtureParticipants(db,id) { return (await db.query('SELECT * FROM fixture_participants WHERE fixture_id=$1 ORDER BY seed_number',[id])).rows; }
 export async function fixtureMatches(db,id) { return (await db.query('SELECT * FROM matches WHERE fixture_id=$1 ORDER BY round_number,match_number',[id])).rows; }
 export async function listFixtures(db,filters={}) { return (await db.query('SELECT * FROM fixtures WHERE ($1::text IS NULL OR tournament_id=$1) AND ($2::text IS NULL OR category_id=$2) ORDER BY created_at DESC',[filters.tournamentId??null,filters.categoryId??null])).rows; }

@@ -9,3 +9,10 @@ export async function updateScore(db,id,a,b,status,winner){return (await db.quer
 export async function addHistory(db,id,a,b,action,user){return (await db.query('INSERT INTO match_score_history (match_id,participant1_score,participant2_score,action,changed_by) VALUES ($1,$2,$3,$4,$5) RETURNING *',[id,a,b,action,user])).rows[0];}
 
 export async function isFinalMatch(db,match){return (await completedKnockoutFinals(db,[match.tournament_id])).some(final=>final.id===match.id);}
+export async function advanceWinner(db,sourceId,winnerId,winnerType) {
+  const source=(await db.query('SELECT next_match_id,next_match_slot FROM matches WHERE id=$1 FOR UPDATE',[sourceId])).rows[0];
+  if(!source?.next_match_id)return null;
+  const column=source.next_match_slot===1?'participant1_id':'participant2_id';
+  const typeColumn=source.next_match_slot===1?'participant1_type':'participant2_type';
+  return (await db.query(`UPDATE matches SET ${column}=$2,${typeColumn}=$3,updated_at=NOW() WHERE id=$1 AND status='SCHEDULED' RETURNING *`,[source.next_match_id,winnerId,winnerType])).rows[0];
+}
