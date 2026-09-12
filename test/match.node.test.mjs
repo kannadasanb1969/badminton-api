@@ -48,11 +48,11 @@ for (const limit of [15, 21, 30]) {
     match.participant1_score = limit - 1; match.participant2_score = limit - 3;
     let response = await request('score', { side: 'A', action: 'INCREMENT' });
     assert.equal(response.body.data.status, 'LIVE'); assert.equal(response.body.data.participant1Score, limit); assert.equal(match.winner_id, null);
-    assert.equal((await request('score', { side: 'A' })).status, 200);
-    assert.equal(match.participant1_score, limit + 1);
-    assert.equal((await request('score', { side: 'A', action: 'DECREMENT' })).body.data.participant1Score, limit);
+    assert.equal((await request('score', { side: 'A' })).status, 409);
+    assert.equal(match.participant1_score, limit);
+    assert.equal((await request('score', { side: 'A', action: 'DECREMENT' })).body.data.participant1Score, limit - 1);
     assert.equal((await request('score', { side: 'A' })).body.data.status, 'LIVE');
-    assert.equal(history.length, 4);
+    assert.equal(history.length, 3);
     const playerView = await request('', {}, 'player', 'GET');
     assert.equal(playerView.body.data.status, 'LIVE'); assert.equal(playerView.body.data.winningPoints, limit);
     response = await request('complete');
@@ -81,6 +81,23 @@ test('second participant can reach ceiling; higher score wins below ceiling', as
   await request('score', { side: 'B', action: 'DECREMENT' });
   await request('score', { side: 'A', action: 'DECREMENT' });
   assert.equal((await request('complete')).body.data.winnerId, 'p2');
+});
+test('completion-eligible LIVE scores freeze increments until a decrement correction', async () => {
+  await request('start', { winningPoints: 15 });
+  match.participant1_score = 15; match.participant2_score = 15;
+  assert.equal((await request('score', { side: 'A' })).status, 200);
+  assert.equal(match.participant1_score, 16);
+  assert.equal((await request('score', { side: 'A' })).status, 200);
+  assert.equal(match.participant1_score, 17);
+  const historyBeforeRejects = history.length;
+  assert.equal((await request('score', { side: 'A' })).status, 409);
+  assert.equal((await request('score', { side: 'B' })).status, 409);
+  assert.equal(history.length, historyBeforeRejects);
+  assert.equal(match.status, 'LIVE');
+  assert.equal((await request('score', { side: 'A', action: 'DECREMENT' })).status, 200);
+  assert.equal(match.participant1_score, 16);
+  assert.equal((await request('score', { side: 'A' })).status, 200);
+  assert.equal(match.participant1_score, 17);
 });
 test('manual final completion generates result and medals once', async () => {
   final = true;
