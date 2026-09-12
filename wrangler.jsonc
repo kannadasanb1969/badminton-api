@@ -19,7 +19,11 @@
 			"binding": "HYPERDRIVE",
 			"id": "53919ed789af4147a88eb54636f4af33"
 		}
-	]
+	],
+	"durable_objects": {
+		"bindings": [{ "name": "MATCH_LIVE_ROOM", "class_name": "MatchLiveRoom" }]
+	},
+	"migrations": [{ "tag": "v1", "new_sqlite_classes": ["MatchLiveRoom"] }]
 	/**
 	 * Smart Placement
 	 * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
