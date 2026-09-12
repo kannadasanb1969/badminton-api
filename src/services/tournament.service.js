@@ -1,3 +1,4 @@
+import {completedResultSummaries,withCompletion} from '../repositories/completion.repository.js';
 import {withDatabase,withTransaction} from '../db/database.js';
 import * as repo from '../repositories/tournament.repository.js';
 import {findById as findUser} from '../repositories/user.repository.js';
@@ -61,12 +62,24 @@ async function nested(db,id,input){
     await repo.replaceRules(db,id,input.generalRules.map(r=>text(r,'rule')));
   }
 }
-async function mapped(db,row){if(!row)throw new TournamentError('Tournament not found',404);const counts=await repo.registrationCounts(db,[row.id]);const cs=await repo.categories(db,row.id);const categories=cs.map(c=>{const x=counts.categories.get(c.id);return {...c,registeredPlayerCount:x?.registered_player_count??0,registeredEntryCount:x?.registered_entry_count??0,registeredTeamCount:x?.registered_team_count??0};});const t=counts.tournaments.get(row.id);return {...mapTournament(row,categories,await repo.rules(db,row.id)),registeredPlayerCount:t?.registered_player_count??0,registeredEntryCount:t?.registered_entry_count??0,registeredTeamCount:t?.registered_team_count??0};}
+async function mapped(db,row){if(!row)throw new TournamentError('Tournament not found',404);const counts=await repo.registrationCounts(db,[row.id]);const cs=await repo.categories(db,row.id);const categories=cs.map(c=>{const x=counts.categories.get(c.id);return {...c,registeredPlayerCount:x?.registered_player_count??0,registeredEntryCount:x?.registered_entry_count??0,registeredTeamCount:x?.registered_team_count??0};});const t=counts.tournaments.get(row.id);const value={...mapTournament(row,categories,await repo.rules(db,row.id)),registeredPlayerCount:t?.registered_player_count??0,registeredEntryCount:t?.registered_entry_count??0,registeredTeamCount:t?.registered_team_count??0};return withCompletion(value,await completedResultSummaries(db,[row.id]));}
 // TODO: Replace client-supplied actor IDs with verified request/session identity.
 // Database role checks are a temporary phase-4 mechanism, not authentication.
 async function actor(db,id){const user=typeof id==='string'?await findUser(db,id):null;if(!user||!user.is_active)throw new TournamentError('Authorization required',403);return user;}
 async function owner(db,row,input){const user=await actor(db,input.adminUserId??input.organizerId);if(user.role!=='ADMIN'&&(user.role!=='ORGANIZER'||user.id!==row.organizer_id))throw new TournamentError('Not authorized for this tournament',403);return user;}
-export const listTournaments=(env,filters={})=>withDatabase(env,async db=>{const rows=await repo.findAll(db,filters);if(!rows.length)return [];const counts=await repo.registrationCounts(db,rows.map(r=>r.id));return Promise.all(rows.map(async row=>{const cs=await repo.categories(db,row.id);const categories=cs.map(c=>{const x=counts.categories.get(c.id);return {...c,registeredPlayerCount:x?.registered_player_count??0,registeredEntryCount:x?.registered_entry_count??0,registeredTeamCount:x?.registered_team_count??0};});const t=counts.tournaments.get(row.id);return {...mapTournament(row,categories,await repo.rules(db,row.id)),registeredPlayerCount:t?.registered_player_count??0,registeredEntryCount:t?.registered_entry_count??0,registeredTeamCount:t?.registered_team_count??0};}));});
+export const listTournaments=(env,filters={})=>withDatabase(env,async db=>{
+  const rows=await repo.findAll(db,filters);if(!rows.length)return [];
+  const ids=rows.map(row=>row.id);
+  const counts=await repo.registrationCounts(db,ids);
+  const categories=(await db.query('SELECT * FROM tournament_categories WHERE tournament_id=ANY($1::text[]) ORDER BY created_at,id',[ids])).rows;
+  const rules=(await db.query('SELECT * FROM tournament_rules WHERE tournament_id=ANY($1::text[]) ORDER BY sort_order,id',[ids])).rows;
+  const summaries=await completedResultSummaries(db,ids);
+  return rows.map(row=>{
+    const cs=categories.filter(category=>category.tournament_id===row.id).map(category=>{const count=counts.categories.get(category.id);return {...category,registeredPlayerCount:count?.registered_player_count??0,registeredEntryCount:count?.registered_entry_count??0,registeredTeamCount:count?.registered_team_count??0};});
+    const count=counts.tournaments.get(row.id);
+    return withCompletion({...mapTournament(row,cs,rules.filter(rule=>rule.tournament_id===row.id)),registeredPlayerCount:count?.registered_player_count??0,registeredEntryCount:count?.registered_entry_count??0,registeredTeamCount:count?.registered_team_count??0},summaries);
+  });
+});
 export const getTournament=(env,id)=>withDatabase(env,async db=>mapped(db,await repo.findById(db,id)));
 export const getTournamentByCode=(env,code)=>withDatabase(env,async db=>mapped(db,await repo.findByCode(db,code)));
 export async function createTournament(env,input){const data=validate(input);return withTransaction(env,async db=>{

@@ -44,7 +44,7 @@ export default {
     if (url.pathname === "/api/notifications" || url.pathname.startsWith("/api/notifications/")) return respond(await handleNotificationRoutes(request, env));
 
     // API health check
-    if (url.pathname === "/api/health") {
+    if ((url.pathname === "/api/health" || url.pathname === "/health")) {
       return respond(Response.json({
         success: true,
         message: "Badminton API is running",

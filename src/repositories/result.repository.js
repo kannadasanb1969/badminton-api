@@ -1,4 +1,5 @@
-export async function finalMatch(db,t,c){return (await db.query("SELECT * FROM matches WHERE tournament_id=$1 AND category_id=$2 AND status='COMPLETED' ORDER BY round_number DESC,match_number DESC LIMIT 1",[t,c])).rows[0];}
+import {completedKnockoutFinals} from './completion.repository.js';
+export async function finalMatch(db,t,c){const finals=(await completedKnockoutFinals(db,[t])).filter(match=>match.category_id===c);return finals.length===1?finals[0]:undefined;}
 export async function result(db,t,c){return (await db.query('SELECT * FROM results WHERE tournament_id=$1 AND category_id=$2',[t,c])).rows[0];}
 export async function resultById(db,id){return (await db.query('SELECT * FROM results WHERE id=$1',[id])).rows[0];}
 export async function resultsBy(db,field,value){if(!['tournament_id','category_id'].includes(field))throw new Error('invalid filter');return (await db.query(`SELECT * FROM results WHERE ${field}=$1 ORDER BY created_at DESC`,[value])).rows;}
