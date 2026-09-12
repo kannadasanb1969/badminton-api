@@ -20,7 +20,7 @@ const a=m.participant1_score??0,b=m.participant2_score??0;
 validateScores(a,b,m.winning_points);
 if(a===b)throw new MatchError('Scores must not be tied');
 if(!m.participant1_id||!m.participant2_id)throw new MatchError('Match participants are incomplete');
-const saved=await repo.updateScore(db,id,a,b,'COMPLETED',a>b?m.participant1_id:m.participant2_id);
+const winnerId=a>b?m.participant1_id:m.participant2_id;const winnerType=a>b?m.participant1_type:m.participant2_type;const saved=await repo.updateScore(db,id,a,b,'COMPLETED',winnerId);await repo.advanceWinner(db,id,winnerId,winnerType);
 // Results and medals are awarded only after the terminal knockout match.
 const fixture=await repo.fixture(db,m.fixture_id);
 if(fixture?.format==='KNOCKOUT' && await repo.isFinalMatch(db,m)) {
