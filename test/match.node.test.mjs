@@ -28,6 +28,7 @@ Client.prototype.query = async (sql, params = []) => {
   if (sql.startsWith('SELECT * FROM match_score_history')) return { rows: history.map((x, id) => ({ id, participant1_score: x[1], participant2_score: x[2] })) };
   if (sql.startsWith('SELECT full_name')) return { rows: [{ name: 'Winner', code: 'PLY1' }] };
   if (sql.startsWith('SELECT * FROM results')) return { rows: results };
+  if (sql.startsWith('SELECT next_match_id,next_match_slot')) return { rows: [{ next_match_id: null, next_match_slot: null }] };
   if (sql.startsWith('INSERT INTO results')) { results.push({ id: params[0], event_type: params[3], winner_participant_id: params[4] }); return { rows: results }; }
   if (sql.startsWith('INSERT INTO medal_history')) { medals.push(params); return { rows: [{}] }; }
   if (sql.startsWith('SELECT user_id')) return { rows: [] };
@@ -47,11 +48,11 @@ for (const limit of [15, 21, 30]) {
     match.participant1_score = limit - 1; match.participant2_score = limit - 3;
     let response = await request('score', { side: 'A', action: 'INCREMENT' });
     assert.equal(response.body.data.status, 'LIVE'); assert.equal(response.body.data.participant1Score, limit); assert.equal(match.winner_id, null);
-    assert.equal((await request('score', { side: 'A' })).status, 400);
-    assert.equal(match.participant1_score, limit);
-    assert.equal((await request('score', { side: 'A', action: 'DECREMENT' })).body.data.participant1Score, limit - 1);
+    assert.equal((await request('score', { side: 'A' })).status, 200);
+    assert.equal(match.participant1_score, limit + 1);
+    assert.equal((await request('score', { side: 'A', action: 'DECREMENT' })).body.data.participant1Score, limit);
     assert.equal((await request('score', { side: 'A' })).body.data.status, 'LIVE');
-    assert.equal(history.length, 3);
+    assert.equal(history.length, 4);
     const playerView = await request('', {}, 'player', 'GET');
     assert.equal(playerView.body.data.status, 'LIVE'); assert.equal(playerView.body.data.winningPoints, limit);
     response = await request('complete');
@@ -75,7 +76,7 @@ test('second participant can reach ceiling; higher score wins below ceiling', as
   await request('start', { winningPoints: 21 });
   match.participant1_score = 21; match.participant2_score = 20;
   assert.equal((await request('score', { side: 'B' })).body.data.status, 'LIVE');
-  assert.equal((await request('score', { side: 'B' })).status, 400);
+  assert.equal((await request('score', { side: 'B' })).status, 200);
   await request('score', { side: 'A', action: 'DECREMENT' });
   await request('score', { side: 'B', action: 'DECREMENT' });
   await request('score', { side: 'A', action: 'DECREMENT' });

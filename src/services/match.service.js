@@ -1,13 +1,13 @@
 import {generateInTransaction} from './result.service.js';
 import {broadcastMatchEvent} from './realtime.service.js';
+import {isValidWinningPoints,isMatchCompletionEligible} from '../utils/match-scoring.js';
 import {withDatabase,withTransaction} from '../db/database.js';import * as repo from '../repositories/match.repository.js';import {mapMatchRow,mapHistoryRow} from '../mappers/match.mapper.js';
 export class MatchError extends Error{constructor(message,status=400){super(message);this.status=status;}}
 async function auth(db,input,m,identity){if(!identity)throw new MatchError('Authentication required',401);const u=(await db.query('SELECT * FROM users WHERE id=$1',[identity.sub])).rows[0];if(!u||!u.is_active||!['ORGANIZER','ADMIN'].includes(u.role))throw new MatchError('Organizer or ADMIN authorization required',403);if(u.role==='ORGANIZER'){const t=(await db.query('SELECT organizer_id FROM tournaments WHERE id=$1',[m.tournament_id])).rows[0];if(!t||t.organizer_id!==u.id)throw new MatchError('Organizer does not own this tournament',403);}}
-const validPoints = value => [15,21,30].includes(value);
+const validPoints = isValidWinningPoints;
 const validateScores = (a,b,limit) => {
   if (!validPoints(limit)) throw new MatchError('Valid winningPoints are required');
   if (!Number.isInteger(a) || !Number.isInteger(b) || a < 0 || b < 0) throw new MatchError('Score cannot go below zero');
-  if (a > limit || b > limit) throw new MatchError('Score limit reached');
 };
 async function enriched(db,row){const out=mapMatchRow(row);if(row.winner_id){const type=row.winner_id===row.participant1_id?row.participant1_type:row.participant2_type;const d=await repo.participantDisplay(db,row.winner_id,type);out.winnerParticipantId=row.winner_id;out.winnerParticipantType=type;out.winnerParticipantName=d?.name??null;out.winnerParticipantCode=d?.code??null;}return out;}
 export const list=(env,q)=>withDatabase(env,async db=>(await repo.all(db,q)).map(mapMatchRow));
@@ -18,7 +18,7 @@ export const score=async(env,id,input,identity)=>{const saved=await withTransact
 export const complete=async(env,id,input,identity)=>{const saved=await withTransaction(env,async db=>{const m=await repo.byId(db,id,true);if(!m)throw new MatchError('Match not found',404);await auth(db,input,m,identity);if(m.status==='COMPLETED'){if(await repo.isFinalMatch(db,m))await generateInTransaction(db,{requestedByUserId:identity.sub,tournamentId:m.tournament_id,categoryId:m.category_id});return enriched(db,m);}if(m.status!=='LIVE')throw new MatchError('Match must be LIVE');
 const a=m.participant1_score??0,b=m.participant2_score??0;
 validateScores(a,b,m.winning_points);
-if(a===b)throw new MatchError('Scores must not be tied');
+if(!isMatchCompletionEligible(a,b,m.winning_points))throw new MatchError('Completion requires a winning-point target and a two-point lead');
 if(!m.participant1_id||!m.participant2_id)throw new MatchError('Match participants are incomplete');
 const winnerId=a>b?m.participant1_id:m.participant2_id;const winnerType=a>b?m.participant1_type:m.participant2_type;const saved=await repo.updateScore(db,id,a,b,'COMPLETED',winnerId);await repo.advanceWinner(db,id,winnerId,winnerType);
 // Results and medals are awarded only after the terminal knockout match.
