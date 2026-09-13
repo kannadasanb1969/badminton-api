@@ -1,6 +1,9 @@
 import { handleRegistrationRoutes } from "./routes/registration.routes.js";
 import { handleFixtureRoutes } from "./routes/fixture.routes.js";
 import { handleTournamentRoutes } from "./routes/tournament.routes.js";
+import { handleFriendlyMatchRoutes } from "./routes/friendly-match.routes.js";
+import { handleFriendlyGameRoutes } from "./routes/friendly-game.routes.js";
+import { handleFriendlyResultRoutes } from "./routes/friendly-result.routes.js";
 import { handleAuthRoutes } from "./routes/auth.routes.js";
 import { handleGuestPlayerRoutes } from "./routes/guestPlayer.routes.js";
 import { Client } from "pg";
@@ -36,6 +39,11 @@ export default {
 
     if (url.pathname === "/api/tournaments" || url.pathname.startsWith("/api/tournaments/")) {
       return respond(await handleTournamentRoutes(request, env));
+    }
+    if (url.pathname === "/api/friendly-matches" || url.pathname.startsWith("/api/friendly-matches/")) {
+      if (url.pathname.includes("/matches/")) return respond(await handleFriendlyGameRoutes(request, env));
+      if (/\/(result|standings|finalize|close|cleanup)$/.test(url.pathname)) return respond(await handleFriendlyResultRoutes(request, env));
+      return respond(await handleFriendlyMatchRoutes(request, env));
     }
 
     if (url.pathname === "/api/registrations" || url.pathname.startsWith("/api/registrations/") || url.pathname === "/api/eligibility/check") {

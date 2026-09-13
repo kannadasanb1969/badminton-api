@@ -1,0 +1,1 @@
+export function createFriendlyGameBroadcaster(){const events=[];const fn=async(_env,room,event)=>{if(fn.fail)throw new Error('broadcast failure');events.push({room,event});};fn.events=events;fn.fail=false;fn.reset=()=>events.splice(0);return fn;}

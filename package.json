@@ -6,7 +6,11 @@
     "deploy": "wrangler deploy",
     "dev": "wrangler dev --env-file .dev.vars --var AUTH_MODE:development",
     "start": "wrangler dev --env-file .dev.vars --var AUTH_MODE:development",
-    "test": "vitest"
+    "test": "vitest",
+    "db:check-target": "node scripts/check-db-target.mjs",
+    "db:verify-friendly-schema": "node scripts/verify-friendly-schema.mjs",
+    "db:verify-friendly-cleanup": "node scripts/verify-friendly-cleanup-smoke.mjs",
+    "db:migrate:friendly:test": "node scripts/run-friendly-migration.mjs"
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "^1.0.0",

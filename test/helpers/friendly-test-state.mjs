@@ -1,0 +1,1 @@
+export function createFriendlyTestState(){return {matches:new Map(),players:new Map(),participants:new Map(),teams:new Map(),fixtures:new Map(),fixtureParticipants:[],gameMatches:new Map(),status:new Map(),scoreHistory:[],sequence:0};}
