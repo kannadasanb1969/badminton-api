@@ -14,11 +14,11 @@ test('production disables fixed OTP and verification',async()=>{
 });
 test('expired OTP commits expiry state and cannot create a user',async()=>{
  calls=[];otp={id:'otp',status:'PENDING',attempt_count:0,unexpired:false};
- await assert.rejects(verifyOtp(env,{mobile:'9999999999',otp:'123456',role:'PLAYER'}),{status:401});
+ await assert.rejects(verifyOtp(env,{mobile:'9999999999',otp:'12345',role:'PLAYER'}),{status:401});
  assert.ok(calls.some(c=>c.values?.includes('EXPIRED')));assert.equal(calls.at(-1).sql,'COMMIT');assert.ok(!calls.some(c=>c.sql.includes('INSERT INTO users')));
 });
 test('consumed OTP and attempt limit reject reuse',async()=>{
  for(const state of [{status:'VERIFIED',attempt_count:0},{status:'PENDING',attempt_count:5}]) {
-  otp={id:'otp',unexpired:true,...state};await assert.rejects(verifyOtp(env,{mobile:'9999999999',otp:'123456',role:'PLAYER'}),{status:401});
+  otp={id:'otp',unexpired:true,...state};await assert.rejects(verifyOtp(env,{mobile:'9999999999',otp:'12345',role:'PLAYER'}),{status:401});
  }
 });

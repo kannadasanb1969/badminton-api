@@ -12,7 +12,7 @@ export class AuthError extends Error {
   constructor(message, status) { super(message); this.status = status; }
 }
 function development(env) {
-  if (!['development','fixed'].includes(env.AUTH_MODE ?? 'fixed')) {
+  if (env.ENVIRONMENT === 'production' || !['development','fixed'].includes(env.AUTH_MODE)) {
     throw new AuthError('OTP provider is not configured', 503);
   }
 }
