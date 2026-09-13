@@ -14,5 +14,9 @@ export async function advanceWinner(db,sourceId,winnerId,winnerType) {
   if(!source?.next_match_id)return null;
   const column=source.next_match_slot===1?'participant1_id':'participant2_id';
   const typeColumn=source.next_match_slot===1?'participant1_type':'participant2_type';
+  const target=(await db.query(`SELECT m.* FROM matches m WHERE m.id=$1 FOR UPDATE`,[source.next_match_id])).rows[0];
+  if(!target||target.status!=='SCHEDULED')return null;
+  if(target[column]!==null&&target[column]!==winnerId)throw new Error('Next-round participant slot is already occupied');
+  if(target[column]===winnerId&&target[typeColumn]===winnerType)return target;
   return (await db.query(`UPDATE matches SET ${column}=$2,${typeColumn}=$3,updated_at=NOW() WHERE id=$1 AND status='SCHEDULED' RETURNING *`,[source.next_match_id,winnerId,winnerType])).rows[0];
 }

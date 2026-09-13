@@ -21,6 +21,7 @@ Client.prototype.query = async (sql, params = []) => {
   if (sql.startsWith('SELECT f.status')) return { rows: [{ status: 'PUBLISHED', format: 'KNOCKOUT' }] };
   if (sql.startsWith('SELECT id,round_number')) return { rows: final ? [match] : [match, { id: 'another', round_number: 1 }] };
   if (sql.startsWith('SELECT m.* FROM matches m JOIN fixtures')) return { rows: final && match.status === 'COMPLETED' ? [{ ...match }] : [] };
+  if (sql.startsWith('SELECT m.* FROM matches m WHERE m.id=$1 FOR UPDATE')) return { rows: [{ ...match, participant1_id: null, participant2_id: null, participant1_type: null, participant2_type: null }] };
   if (sql.startsWith('SELECT * FROM matches')) return { rows: [ { ...match } ] };
   if (sql.startsWith('UPDATE matches SET status=')) { match = { ...match, status: 'LIVE', winning_points: params[1] }; return { rows: [match] }; }
   if (sql.startsWith('UPDATE matches SET participant1_score')) { match = { ...match, participant1_score: params[1], participant2_score: params[2], status: params[3], winner_id: params[4] }; return { rows: [match] }; }
