@@ -1,5 +1,6 @@
 import * as auth from '../services/auth.service.js';
 import {successResponse,errorResponse} from '../utils/response.js';
+import { verifyAccessToken } from '../utils/auth-token.js';
 async function body(request) {
   try {return await request.json();} catch {throw new auth.AuthError('Valid JSON required',400);}
 }
@@ -12,6 +13,7 @@ export async function handleAuthRoutes(request,env) {
       if(path.endsWith('/request-otp')) return Response.json(await auth.requestOtp(env,input));
       return successResponse(await (path.endsWith('/login')?auth.login:auth.verifyOtp)(env,input));
     }
+    if(path==='/api/auth/select-workspace') { if(request.method!=='POST') return errorResponse('Method not allowed',405); const token=request.headers.get('Authorization')?.match(/^Bearer\s+(.+)$/i)?.[1]; const identity=token?await verifyAccessToken(env,token):null; return successResponse(await auth.selectWorkspace(env,await body(request),identity)); }
     const match=path.match(/^\/api\/users\/(?:mobile\/([^/]+)|([^/]+))$/);
     if(match) {
       if(request.method!=='GET') return errorResponse('Method not allowed',405);

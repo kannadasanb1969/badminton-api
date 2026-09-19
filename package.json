@@ -10,7 +10,8 @@
     "db:check-target": "node scripts/check-db-target.mjs",
     "db:verify-friendly-schema": "node scripts/verify-friendly-schema.mjs",
     "db:verify-friendly-cleanup": "node scripts/verify-friendly-cleanup-smoke.mjs",
-    "db:migrate:friendly:test": "node scripts/run-friendly-migration.mjs"
+    "db:migrate:friendly:test": "node scripts/run-friendly-migration.mjs",
+    "db:seed:knockout-dev": "node scripts/seed-knockout-dev.mjs"
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "^1.0.0",
