@@ -7,12 +7,12 @@ export class RealtimeError extends Error {
 
 export function getMatchRoomName(matchId) { return `match:${matchId}`; }
 
-async function canView(db, matchId, identity) {
+async function canViewTournamentMatch(db, matchId, identity) {
   const match = (await db.query(`
     SELECT m.id,m.tournament_id,m.participant1_id,m.participant1_type,
            m.participant2_id,m.participant2_type,t.organizer_id
     FROM matches m JOIN tournaments t ON t.id=m.tournament_id WHERE m.id=$1`, [matchId])).rows[0];
-  if (!match) throw new RealtimeError('Match not found', 404);
+  if (!match) return null;
   if (!identity) throw new RealtimeError('Authentication required', 401);
   if (identity.role === 'ADMIN' || identity.role === 'ORGANIZER' && identity.sub === match.organizer_id) return match;
   if (identity.role !== 'PLAYER') throw new RealtimeError('Not authorized to view this match', 403);
@@ -26,6 +26,36 @@ async function canView(db, matchId, identity) {
     )`, [matchId, identity.sub])).rows.length > 0;
   if (!allowed) throw new RealtimeError('Not authorized to view this match', 403);
   return match;
+}
+
+async function canViewFriendlyMatch(db, matchId, identity) {
+  const match = (await db.query(`
+    SELECT gm.id,gm.friendly_match_id,gm.participant1_id,gm.participant1_type,
+           gm.participant2_id,gm.participant2_type,fm.creator_player_id
+    FROM friendly_game_matches gm JOIN friendly_matches fm ON fm.id=gm.friendly_match_id WHERE gm.id=$1`, [matchId])).rows[0];
+  if (!match) return null;
+  if (!identity) throw new RealtimeError('Authentication required', 401);
+  if (identity.role === 'ADMIN') return match;
+  if (identity.role !== 'PLAYER') throw new RealtimeError('Not authorized to view this match', 403);
+  const allowed = (await db.query(`
+    SELECT 1 FROM friendly_game_matches gm JOIN friendly_matches fm ON fm.id=gm.friendly_match_id
+    WHERE gm.id=$1 AND (
+      EXISTS (SELECT 1 FROM player_profiles p WHERE p.id=fm.creator_player_id AND p.user_id=$2)
+      OR (gm.participant1_type='PLAYER' AND EXISTS (SELECT 1 FROM player_profiles p WHERE p.id=gm.participant1_id AND p.user_id=$2))
+      OR (gm.participant2_type='PLAYER' AND EXISTS (SELECT 1 FROM player_profiles p WHERE p.id=gm.participant2_id AND p.user_id=$2))
+      OR (gm.participant1_type='TEAM' AND EXISTS (SELECT 1 FROM friendly_match_team_members tm JOIN player_profiles p ON p.id=tm.player_id WHERE tm.team_id=gm.participant1_id AND p.user_id=$2))
+      OR (gm.participant2_type='TEAM' AND EXISTS (SELECT 1 FROM friendly_match_team_members tm JOIN player_profiles p ON p.id=tm.player_id WHERE tm.team_id=gm.participant2_id AND p.user_id=$2))
+    )`, [matchId, identity.sub])).rows.length > 0;
+  if (!allowed) throw new RealtimeError('Not authorized to view this match', 403);
+  return match;
+}
+
+export async function canView(db, matchId, identity) {
+  const tournamentMatch = await canViewTournamentMatch(db, matchId, identity);
+  if (tournamentMatch) return tournamentMatch;
+  const friendlyMatch = await canViewFriendlyMatch(db, matchId, identity);
+  if (friendlyMatch) return friendlyMatch;
+  throw new RealtimeError('Match not found', 404);
 }
 
 export async function authorizeRealtime(env, matchId, token) {

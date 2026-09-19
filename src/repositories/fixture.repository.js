@@ -4,6 +4,11 @@ export async function category(db, id) { return (await db.query('SELECT * FROM t
 export async function existingFixture(db,t,c) { return (await db.query('SELECT * FROM fixtures WHERE tournament_id=$1 AND category_id=$2 LIMIT 1',[t,c])).rows[0]; }
 export async function nextCode(db,prefix,table,column) { return (await db.query(`SELECT COALESCE(MAX(substring(${column} FROM ${prefix.length+1})::numeric),0)::text AS n FROM ${table} WHERE ${column} ~ $1`, [`^${prefix}[0-9]+$`])).rows[0].n; }
 export async function users(db,id) { return (await db.query('SELECT * FROM users WHERE id=$1',[id])).rows[0]; }
+export async function playerProfilesByIds(db,ids) {
+  if(!ids.length) return new Map();
+  const rows=(await db.query('SELECT id,full_name,player_code FROM player_profiles WHERE id=ANY($1::text[])',[ids])).rows;
+  return new Map(rows.map(r=>[r.id,r]));
+}
 export async function teams(db,t,c) { return (await db.query('SELECT * FROM teams WHERE ($1::text IS NULL OR tournament_id=$1) AND ($2::text IS NULL OR category_id=$2) ORDER BY created_at',[t??null,c??null])).rows; }
 export async function teamById(db,id) { return (await db.query('SELECT * FROM teams WHERE id=$1',[id])).rows[0]; }
 export async function insertTeam(db,t,c,a,at,b,bt,code) { return (await db.query("INSERT INTO teams (team_code,tournament_id,category_id,player1_id,player1_type,player2_id,player2_type,partner_status,status,confirmed_at) VALUES ($1,$2,$3,$4,$5,$6,$7,'NOT_REQUIRED','CONFIRMED',NOW()) RETURNING *",[code,t,c,a,at,b,bt])).rows[0]; }

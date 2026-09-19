@@ -8,15 +8,15 @@ export async function handleTournamentRoutes(request,env){try{
   const url=new URL(request.url);let parts;try{parts=url.pathname.replace(/\/$/,'').split('/').slice(3).map(decodeURIComponent);}catch{throw new service.TournamentError('Invalid URL encoding');}
   if(parts.length===0){
     if(request.method==='GET')return successResponse(await service.listTournaments(env,Object.fromEntries(url.searchParams)));
-    if(request.method==='POST')return successResponse(await service.createTournament(env,await body(request)),201);
+    if(request.method==='POST')return successResponse(await service.createTournament(env,await body(request),identity),201);
   }else if(parts.length===2&&parts[0]==='code'){
     if(request.method==='GET')return successResponse(await service.getTournamentByCode(env,parts[1]));
   }else if(parts.length===1&&parts[0]){
     if(request.method==='GET')return successResponse(await service.getTournament(env,parts[0]));
-    if(request.method==='PUT')return successResponse(await service.updateTournament(env,parts[0],await body(request)));
+    if(request.method==='PUT')return successResponse(await service.updateTournament(env,parts[0],await body(request),identity));
     // Permanent DELETE is unsupported: tournament history must be retained.
   }else if(parts.length===2&&['submit','approve','reject','publish'].includes(parts[1])){
-    if(request.method==='POST')return successResponse(await service.transitionTournament(env,parts[0],parts[1],await body(request)));
+    if(request.method==='POST')return successResponse(await service.transitionTournament(env,parts[0],parts[1],await body(request),identity));
   }else if(parts.length===4&&parts[1]==='categories'&&parts[3]==='close'){
     if(request.method==='POST')return successResponse(await service.closeCategoryRegistration(env,parts[0],parts[2],identity),200);
   }else return errorResponse('API endpoint not found',404);

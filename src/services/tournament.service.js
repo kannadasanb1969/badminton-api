@@ -63,10 +63,10 @@ async function nested(db,id,input){
   }
 }
 async function mapped(db,row){if(!row)throw new TournamentError('Tournament not found',404);const counts=await repo.registrationCounts(db,[row.id]);const cs=await repo.categories(db,row.id);const categories=cs.map(c=>{const x=counts.categories.get(c.id);return {...c,registeredPlayerCount:x?.registered_player_count??0,registeredEntryCount:x?.registered_entry_count??0,registeredTeamCount:x?.registered_team_count??0};});const t=counts.tournaments.get(row.id);const value={...mapTournament(row,categories,await repo.rules(db,row.id)),registeredPlayerCount:t?.registered_player_count??0,registeredEntryCount:t?.registered_entry_count??0,registeredTeamCount:t?.registered_team_count??0};return withCompletion(value,await completedResultSummaries(db,[row.id]));}
-// TODO: Replace client-supplied actor IDs with verified request/session identity.
-// Database role checks are a temporary phase-4 mechanism, not authentication.
 async function actor(db,id){const user=typeof id==='string'?await findUser(db,id):null;if(!user||!user.is_active)throw new TournamentError('Authorization required',403);return user;}
-async function owner(db,row,input){const user=await actor(db,input.adminUserId??input.organizerId);if(user.role!=='ADMIN'&&(user.role!=='ORGANIZER'||user.id!==row.organizer_id))throw new TournamentError('Not authorized for this tournament',403);return user;}
+// Resolves the acting user from the VERIFIED bearer token identity (not a client-supplied body field).
+async function identityActor(db,identity){if(!identity)throw new TournamentError('Authentication required',401);return actor(db,identity.sub);}
+async function owner(db,row,identity){const user=await identityActor(db,identity);if(user.role!=='ADMIN'&&(user.role!=='ORGANIZER'||user.id!==row.organizer_id))throw new TournamentError('Not authorized for this tournament',403);return user;}
 export const listTournaments=(env,filters={})=>withDatabase(env,async db=>{
   const rows=await repo.findAll(db,filters);if(!rows.length)return [];
   const ids=rows.map(row=>row.id);
@@ -82,21 +82,21 @@ export const listTournaments=(env,filters={})=>withDatabase(env,async db=>{
 });
 export const getTournament=(env,id)=>withDatabase(env,async db=>mapped(db,await repo.findById(db,id)));
 export const getTournamentByCode=(env,code)=>withDatabase(env,async db=>mapped(db,await repo.findByCode(db,code)));
-export async function createTournament(env,input){const data=validate(input);return withTransaction(env,async db=>{
-  const user=await actor(db,input.organizerId);if(user.role!=='ORGANIZER')throw new TournamentError('Only ORGANIZER users can create tournaments',403);
+export async function createTournament(env,input,identity){const data=validate(input);return withTransaction(env,async db=>{
+  const user=await identityActor(db,identity);if(user.role!=='ORGANIZER')throw new TournamentError('Only ORGANIZER users can create tournaments',403);
   await repo.lockCreation(db);const code='TRN'+(BigInt(await repo.highestCode(db))+1n).toString().padStart(6,'0');
   const row=await repo.insert(db,data,code,user);await nested(db,row.id,input);return mapped(db,row);
 });}
-export function updateTournament(env,id,input){object(input);return withTransaction(env,async db=>{
-  const row=await repo.findById(db,id,true);if(!row)throw new TournamentError('Tournament not found',404);await owner(db,row,input);
+export function updateTournament(env,id,input,identity){object(input);return withTransaction(env,async db=>{
+  const row=await repo.findById(db,id,true);if(!row)throw new TournamentError('Tournament not found',404);await owner(db,row,identity);
   if(!['DRAFT','REJECTED'].includes(row.status))throw new TournamentError('Only DRAFT or REJECTED tournaments can be edited',409);
   if(input.organizerId&&input.organizerId!==row.organizer_id)throw new TournamentError('Organizer cannot be reassigned');
   const updated=await repo.update(db,id,validate(input,row));await nested(db,id,input);return mapped(db,updated);
 });}
-export function transitionTournament(env,id,action,input){object(input);return withTransaction(env,async db=>{
+export function transitionTournament(env,id,action,input,identity){object(input);return withTransaction(env,async db=>{
   const row=await repo.findById(db,id,true);if(!row)throw new TournamentError('Tournament not found',404);
-  let user;if(action==='submit'){user=await owner(db,row,input);}else{
-    user=await actor(db,input.adminUserId);if(user.role!=='ADMIN'||user.id===row.organizer_id)throw new TournamentError('A separate ADMIN is required',403);
+  let user;if(action==='submit'){user=await owner(db,row,identity);}else{
+    user=await identityActor(db,identity);if(user.role!=='ADMIN'||user.id===row.organizer_id)throw new TournamentError('A separate ADMIN is required',403);
   }
   const allowed={submit:['DRAFT','REJECTED'],approve:['PENDING_ADMIN_APPROVAL'],reject:['PENDING_ADMIN_APPROVAL'],publish:['APPROVED']};
   if(!allowed[action]?.includes(row.status))throw new TournamentError('INVALID_TOURNAMENT_STATUS_TRANSITION',409);

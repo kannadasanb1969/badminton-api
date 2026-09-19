@@ -9,7 +9,16 @@ const validateScores = (a,b,limit) => {
   if (!validPoints(limit)) throw new MatchError('Valid winningPoints are required');
   if (!Number.isInteger(a) || !Number.isInteger(b) || a < 0 || b < 0) throw new MatchError('Score cannot go below zero');
 };
-async function enriched(db,row){const out=mapMatchRow(row);if(row.winner_id){const type=row.winner_id===row.participant1_id?row.participant1_type:row.participant2_type;const d=await repo.participantDisplay(db,row.winner_id,type);out.winnerParticipantId=row.winner_id;out.winnerParticipantType=type;out.winnerParticipantName=d?.name??null;out.winnerParticipantCode=d?.code??null;}return out;}
+async function enriched(db,row){const out=mapMatchRow(row);
+// Match rows never carry organizer_id (only tournament_id) — mobile's client-side ownership gate for the
+// Start/Score/Complete controls needs it (server-side auth() already enforces this independently on every write).
+const t=(await db.query('SELECT organizer_id FROM tournaments WHERE id=$1',[row.tournament_id])).rows[0];
+out.organizerId=t?.organizer_id??null;
+// Match rows only carry participant{1,2}_id/type (see fixture.repository.js insertMatch) — resolve
+// display names/codes the same way the winner is already enriched below, so scoring screens never show raw ids/TBD.
+if(row.participant1_id){const d=await repo.participantDisplay(db,row.participant1_id,row.participant1_type);out.participant1Name=d?.name??null;out.participant1Code=d?.code??null;}
+if(row.participant2_id){const d=await repo.participantDisplay(db,row.participant2_id,row.participant2_type);out.participant2Name=d?.name??null;out.participant2Code=d?.code??null;}
+if(row.winner_id){const type=row.winner_id===row.participant1_id?row.participant1_type:row.participant2_type;const d=await repo.participantDisplay(db,row.winner_id,type);out.winnerParticipantId=row.winner_id;out.winnerParticipantType=type;out.winnerParticipantName=d?.name??null;out.winnerParticipantCode=d?.code??null;}return out;}
 export const list=(env,q)=>withDatabase(env,async db=>(await repo.all(db,q)).map(mapMatchRow));
 export const get=(env,id)=>withDatabase(env,async db=>{const m=await repo.byId(db,id);if(!m)throw new MatchError('Match not found',404);return enriched(db,m);});
 export const hist=(env,id)=>withDatabase(env,async db=>(await repo.history(db,id)).map(mapHistoryRow));

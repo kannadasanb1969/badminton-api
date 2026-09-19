@@ -31,7 +31,10 @@ for (const [type,slot,winner] of [['PLAYER',1,'player-a'],['TEAM',2,'team-a']]) 
     assert.equal(x.state.matches.get('f').status,'ACTIVE');
     assert.equal(x.broadcaster.events.length,1);
     const event=x.broadcaster.events[0];
-    assert.equal(event.room,'friendly-match:source'); assert.equal(event.event.type,'MATCH_COMPLETED');
+    // The broadcaster receives the raw friendly game match id (not a prefixed key) so that the DO room name
+    // it computes (via realtime.service.js getMatchRoomName) matches the room a client connects to at
+    // GET /api/realtime/matches/:matchId using this same id.
+    assert.equal(event.room,'source'); assert.equal(event.event.type,'MATCH_COMPLETED');
     assert.equal(event.event.winnerId,winner); assert.equal(event.event.winningPoints,21);
   });
 }
@@ -55,9 +58,12 @@ test('conflicting downstream occupant rolls back source and emits no completion 
   assert.equal(x.broadcaster.events.length,0);
 });
 
-test('friendly completion room is isolated from another friendly game and official room naming',async()=>{
+test('friendly completion broadcasts to the room keyed by its own match id, not another game\'s',async()=>{
   const x=setup(); x.state.gameMatches.set('other',{id:'other',friendly_match_id:'f',status:'LIVE',participant1_id:'x',participant2_id:'y'});
   await x.service.complete({},'f','source',x.identity);
-  assert.deepEqual([...new Set(x.broadcaster.events.map(e=>e.room))],['friendly-match:source']);
-  assert.notEqual('friendly-match:source','match:source');
+  // Room naming intentionally matches src/services/realtime.service.js's getMatchRoomName(matchId), which the
+  // WebSocket connect route also uses for GET /api/realtime/matches/:matchId — no extra friendly-specific prefix,
+  // since friendly game match ids and tournament match ids are separate UUID id spaces and won't collide.
+  assert.deepEqual([...new Set(x.broadcaster.events.map(e=>e.room))],['source']);
+  assert.notEqual(x.broadcaster.events[0].room,'other');
 });
