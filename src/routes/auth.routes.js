@@ -6,10 +6,12 @@ async function body(request) {
 export async function handleAuthRoutes(request,env) {
   try {
     const url=new URL(request.url);const path=url.pathname.replace(/\/$/,'');
-    if(['/api/auth/request-otp','/api/auth/verify-otp','/api/auth/login'].includes(path)) {
+    if(['/api/auth/request-otp','/api/auth/verify-otp','/api/auth/login','/api/auth/refresh','/api/auth/logout'].includes(path)) {
       if(request.method!=='POST') return errorResponse('Method not allowed',405);
       const input=await body(request);
       if(path.endsWith('/request-otp')) return Response.json(await auth.requestOtp(env,input));
+      if(path.endsWith('/refresh')) return successResponse(await auth.refresh(env,input));
+      if(path.endsWith('/logout')) return successResponse(await auth.logout(env,input));
       return successResponse(await (path.endsWith('/login')?auth.login:auth.verifyOtp)(env,input));
     }
     const match=path.match(/^\/api\/users\/(?:mobile\/([^/]+)|([^/]+))$/);

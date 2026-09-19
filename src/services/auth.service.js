@@ -42,6 +42,8 @@ async function matches(otp, stored) {
   for(let i=0;i<actual.length;i++) difference |= actual.charCodeAt(i) ^ (hash.charCodeAt(i)||0);
   return difference===0;
 }
+function refreshToken() { return `${crypto.randomUUID()}.${crypto.randomUUID()}`; }
+async function tokenHash(token) { return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(token))),x=>x.toString(16).padStart(2,'0')).join(''); }
 export async function requestOtp(env,input) {
   development(env);object(input);const mobile=mobileValue(input.mobile);
   const hash=await hashOtp(FIXED_OTP);
@@ -64,11 +66,17 @@ export async function verifyOtp(env,input) {
     if(!user) user=await users.createPlayerUser(db,mobile);
     await otpStore.setStatus(db,otp.id,'VERIFIED');
     const profiles=role==='PLAYER'?await users.linkedProfiles(db,user.id):[];
-    return {user:mapUserRow(user),playerProfile:profiles.length===1?mapPlayerRow(profiles[0]):null,accessToken:await issueAccessToken(env,user)};
+    const persistent=refreshToken();await otpStore.createSession(db,user.id,await tokenHash(persistent));
+    return {user:mapUserRow(user),playerProfile:profiles.length===1?mapPlayerRow(profiles[0]):null,accessToken:await issueAccessToken(env,user),refreshToken:persistent};
   });
   if(result.error) throw new AuthError(result.error,result.status);
   return result;
 }
+export async function refresh(env,input) {
+  development(env);object(input);if(typeof input.refreshToken!=='string'||!input.refreshToken) throw new AuthError('Refresh token required',401);
+  return withTransaction(env,async db=>{const session=await otpStore.sessionByHash(db,await tokenHash(input.refreshToken));if(!session)throw new AuthError('Session is no longer valid',401);const user=await users.findById(db,session.user_id);if(!user?.is_active) {await db.query('UPDATE auth_sessions SET revoked_at=NOW() WHERE id=$1',[session.id]);throw new AuthError('Authentication is no longer valid',401);}const next=refreshToken();await otpStore.rotateSession(db,session.id,await tokenHash(next));return {user:mapUserRow(user),accessToken:await issueAccessToken(env,user),refreshToken:next};});
+}
+export async function logout(env,input) { object(input); if(typeof input.refreshToken==='string'&&input.refreshToken) await withTransaction(env,async db=>otpStore.revokeSession(db,await tokenHash(input.refreshToken))); return {success:true}; }
 // Compatibility alias; no independent login bypass or fake token generation.
 export const login = verifyOtp;
 export async function getUser(env,id) {
