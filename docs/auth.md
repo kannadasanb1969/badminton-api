@@ -7,10 +7,11 @@ or NODE_ENV is production. Deployment configuration has not been changed.
 
 Request an OTP with POST /api/auth/request-otp and {"mobile":"9999999999"}.
 POST /api/auth/verify-otp or /api/auth/login accepts
-{"mobile":"9999999999","otp":"123456","role":"PLAYER"} and returns
+{"mobile":"9999999999","otp":"12345","role":"PLAYER"} and returns
 {success:true,data:{user,playerProfile}}. There is no OTP-less login bypass.
-The fixed development OTP is defined only in auth.service.js. Hashes use salted
-PBKDF2. Requests expire in five minutes and allow five failed attempts; requesting
+The fixed development OTP is defined only in auth.service.js. In development mode
+only, request-otp also returns `devOtp`; this field is never returned outside
+development. Hashes use salted PBKDF2. Requests expire in five minutes and allow five failed attempts; requesting
 a replacement cancels outstanding requests. Successful verification consumes it.
 
 Only PLAYER users can self-register. ORGANIZER and ADMIN must be provisioned.

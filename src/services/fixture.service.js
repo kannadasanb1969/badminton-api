@@ -130,6 +130,6 @@ export async function generate(env,input,identity){if(!input?.tournamentId||!inp
   // power of two, byes are seeded so a bye-winner's participant is carried straight into their round-2+ slot
   // (see buildKnockoutBracket), matching the same algorithm already used for friendly-match knockout fixtures.
   const topology=buildKnockoutBracket(parts);const ids=new Map();let n=1;
-  for(const x of topology.matches){const row=await repo.insertMatch(db,f.id,t.id,c.id,n++,x.participant1?.id??null,x.participant1?.type??null,x.participant2?.id??null,x.participant2?.type??null,x.round);ids.set(x.key,row.id);}
+  for(const x of topology.matches){const autoAdvanced=Boolean(x.byeParticipant);const status=autoAdvanced?'WALKOVER':'SCHEDULED';const row=await repo.insertMatch(db,f.id,t.id,c.id,n++,x.participant1?.id??null,x.participant1?.type??null,x.participant2?.id??null,x.participant2?.type??null,x.round,status,autoAdvanced);ids.set(x.key,row.id);}
   for(const x of topology.matches){if(x.next)await repo.linkNextMatch(db,ids.get(x.key),ids.get(x.next),x.nextSlot);}
 }return mapped(db,f);});}
