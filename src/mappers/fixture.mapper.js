@@ -1,8 +1,12 @@
 const camel = (k) => k.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
-export function mapFixtureRow(row, participants = [], matches = []) {
+export function mapFixtureRow(row, participants = [], matches = [], pools = []) {
   if (!row) return null;
   const out = Object.fromEntries(Object.entries(row).map(([k, v]) => [camel(k), v]));
-  return { ...out, participants, matches };
+  return { ...out, participants, matches, pools: pools.map(mapPoolRow) };
+}
+export function mapPoolRow(row) {
+  if (!row) return null;
+  return Object.fromEntries(Object.entries(row).map(([k, v]) => [camel(k), v]));
 }
 export function mapTeamRow(row, players = []) {
   if (!row) return null;

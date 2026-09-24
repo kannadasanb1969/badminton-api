@@ -72,6 +72,25 @@ export async function verifyOtp(env,input) {
   if(result.error) throw new AuthError(result.error,result.status);
   return result;
 }
+// Mirrors badminton-api-prod-deploy's selectWorkspace: switches the current session to a sibling
+// account with the SAME mobile number but a different role (users are unique per mobile+role — see
+// docs/auth.md; only PLAYER self-registers, ORGANIZER/ADMIN must be pre-provisioned). This is not a
+// role change on the current user; it looks up the existing (mobile, targetRole) account and issues
+// fresh tokens for it, failing with a clear 403 if no such account exists rather than fabricating one.
+export async function selectWorkspace(env,input,identity) {
+  object(input);const workspace=roleValue(String(input.workspace||'').toUpperCase());
+  if(!identity) throw new AuthError('Authentication required',401);
+  return withTransaction(env,async db=>{
+    const current=await users.findById(db,identity.sub);
+    if(!current||!current.is_active) throw new AuthError('Authentication not permitted',403);
+    if(current.role==='ADMIN'||workspace==='ADMIN') throw new AuthError('Admin workspace switching is not permitted',403);
+    const user=(await users.findByMobile(db,current.mobile,workspace))[0];
+    if(!user?.is_active) throw new AuthError(`${workspace} workspace is not enabled for this account`,403);
+    const persistent=refreshToken();await otpStore.createSession(db,user.id,await tokenHash(persistent));
+    const profiles=workspace==='PLAYER'?await users.linkedProfiles(db,user.id):[];
+    return {user:mapUserRow(user),playerProfile:profiles.length===1?mapPlayerRow(profiles[0]):null,accessToken:await issueAccessToken(env,user),refreshToken:persistent};
+  });
+}
 export async function refresh(env,input) {
   development(env);object(input);if(typeof input.refreshToken!=='string'||!input.refreshToken) throw new AuthError('Refresh token required',401);
   return withTransaction(env,async db=>{const session=await otpStore.sessionByHash(db,await tokenHash(input.refreshToken));if(!session)throw new AuthError('Session is no longer valid',401);const user=await users.findById(db,session.user_id);if(!user?.is_active) {await db.query('UPDATE auth_sessions SET revoked_at=NOW() WHERE id=$1',[session.id]);throw new AuthError('Authentication is no longer valid',401);}const next=refreshToken();await otpStore.rotateSession(db,session.id,await tokenHash(next));return {user:mapUserRow(user),accessToken:await issueAccessToken(env,user),refreshToken:next};});

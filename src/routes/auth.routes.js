@@ -1,5 +1,6 @@
 import * as auth from '../services/auth.service.js';
 import {successResponse,errorResponse} from '../utils/response.js';
+import {verifyAccessToken} from '../utils/auth-token.js';
 async function body(request) {
   try {return await request.json();} catch {throw new auth.AuthError('Valid JSON required',400);}
 }
@@ -13,6 +14,12 @@ export async function handleAuthRoutes(request,env) {
       if(path.endsWith('/refresh')) return successResponse(await auth.refresh(env,input));
       if(path.endsWith('/logout')) return successResponse(await auth.logout(env,input));
       return successResponse(await (path.endsWith('/login')?auth.login:auth.verifyOtp)(env,input));
+    }
+    if(path==='/api/auth/select-workspace') {
+      if(request.method!=='POST') return errorResponse('Method not allowed',405);
+      const bearer=request.headers.get('Authorization')?.match(/^Bearer\s+(.+)$/i)?.[1];
+      const identity=bearer?await verifyAccessToken(env,bearer):null;
+      return successResponse(await auth.selectWorkspace(env,await body(request),identity));
     }
     const match=path.match(/^\/api\/users\/(?:mobile\/([^/]+)|([^/]+))$/);
     if(match) {
