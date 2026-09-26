@@ -8,3 +8,18 @@ for(const n of [4,5,6,7,8])test(`doubles knockout ${n} teams`,()=>{const b=build
 for(const n of [6,8])test(`singles league ${n}`,()=>{const p=buildLeaguePairings(ids(n));assert.equal(p.length,n*(n-1)/2);assert.equal(new Set(p.map(x=>[x.participant1,x.participant2].sort().join('-'))).size,p.length);});
 for(const n of [4,8])test(`doubles league ${n}`,()=>assert.equal(buildLeaguePairings(ids(n).map(x=>`T${x}`)).length,n*(n-1)/2));
 test('no fake BYE identity is created',()=>{const b=buildKnockoutBracket(ids(6));assert.ok(b.matches.some(m=>m.byeParticipant));assert.ok(b.matches.flatMap(m=>[m.participant1,m.participant2]).every(x=>x===null||/^P\d+$/.test(x)));});
+test('six-player knockout preserves both BYE winners in the semifinal',()=>{
+  const b=buildKnockoutBracket(ids(6));
+  const round1=b.rounds[0],semi=b.rounds[1],final=b.rounds[2][0];
+  const byeMatches=round1.filter(m=>m.byeParticipant);
+  assert.equal(b.matches.length,7);
+  assert.equal(round1.length,4);
+  assert.equal(byeMatches.length,2);
+  assert.deepEqual(byeMatches.map(m=>m.byeParticipant).sort(),['P1','P2']);
+  assert.deepEqual([semi[0].participant1,semi[0].participant2],['P1','P2']);
+  assert.equal(semi[0].source1,null);
+  assert.equal(semi[0].source2,null);
+  assert.deepEqual([semi[1].source1,semi[1].source2],['R1M3','R1M4']);
+  assert.deepEqual([final.source1,final.source2],['R2M1','R2M2']);
+  assert.deepEqual(buildKnockoutBracket(ids(6)),b);
+});
