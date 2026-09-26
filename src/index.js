@@ -14,8 +14,12 @@ import { handleNotificationRoutes } from "./routes/notification.routes.js";
 import { corsResponse, preflight } from "./utils/cors.js";
 import { handleRealtimeRoutes } from "./routes/realtime.routes.js";
 import { MatchLiveRoom } from "./durable-objects/match-live-room.js";
+import { DATABASE_MODE } from "../dbConfig.js";
 
 export { MatchLiveRoom };
+
+// Safe one-time startup banner — never logs a URL, credential, or token.
+console.log(`---------------------------------------\nSmashPoint Backend\nDatabase Mode: ${DATABASE_MODE}\n---------------------------------------`);
 
 export default {
   async fetch(request, env) {
