@@ -11,15 +11,24 @@ export async function handleRegistrationRoutes(request,env){try{
     if(request.method!=='POST')return errorResponse('Method not allowed',405);
     return successResponse(await service.previewEligibility(env,await body(request)));
   }
+  if(path==='/api/registrations/me'){
+    if(request.method!=='GET')return errorResponse('Method not allowed',405);
+    return successResponse(await service.listOwnRegistrations(env,identity,url.searchParams.get('scope')||'all'));
+  }
   let parts;try{parts=path.split('/').slice(3).map(decodeURIComponent);}catch{throw new service.RegistrationError('Invalid URL encoding');}
   const filters=Object.fromEntries(url.searchParams);
   if(!parts.length){
-    if(request.method==='GET')return successResponse(await service.listRegistrations(env,filters));
+    if(request.method==='GET'){
+      if(identity?.role==='PLAYER')return successResponse(await service.listOwnRegistrations(env,identity,filters.scope||'all'));
+      if(!identity||!['ADMIN','ORGANIZER'].includes(identity.role))throw new service.RegistrationError('Authentication required',401,'UNAUTHENTICATED');
+      return successResponse(await service.listRegistrations(env,filters));
+    }
     if(request.method==='POST')return successResponse(await service.createRegistration(env,await body(request),identity),201);
   }else if(parts.length===1&&parts[0]){
     if(request.method==='GET')return successResponse(await service.getRegistration(env,parts[0]));
   }else if(parts.length===2&&['player','tournament'].includes(parts[0])){
-    if(request.method==='GET')return successResponse(await service.listRegistrations(env,{...filters,[parts[0]+'Id']:parts[1]}));
+    if(request.method==='GET'&&parts[0]==='player')return successResponse(await service.listPlayerRegistrations(env,parts[1],identity));
+    if(request.method==='GET'&&parts[0]==='tournament')return successResponse(await service.listRegistrations(env,{...filters,tournamentId:parts[1]}));
   }else if(parts.length===2&&parts[1]==='cancel'){
     if(request.method==='POST')return successResponse(await service.cancelRegistration(env,parts[0],await body(request,true),identity));
   }else return errorResponse('API endpoint not found',404);

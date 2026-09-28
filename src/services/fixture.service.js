@@ -2,6 +2,7 @@ import { withDatabase, withTransaction } from '../db/database.js';
 import * as repo from '../repositories/fixture.repository.js';
 import { mapFixtureRow, mapTeamRow } from '../mappers/fixture.mapper.js';
 import { buildKnockoutBracket, buildRoundRobinSchedule, calculatePoolSizes, assignPools, selectQualifiers } from '../utils/friendly-fixtures.js';
+import { participantDisplay } from '../repositories/match.repository.js';
 export class FixtureError extends Error { constructor(message,status=400){super(message);this.status=status;} }
 const shuffle = (a) => { const x=[...a]; for(let i=x.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[x[i],x[j]]=[x[j],x[i]];} return x; };
 // Resolves the acting user from the VERIFIED bearer token identity (not client-supplied organizerUserId/requestedByUserId body fields).
@@ -23,7 +24,19 @@ async function mapped(db,f){
   ]);
   const poolByParticipant=new Map(participantLinks.map(l=>[String(l.participant_id),l.pool_id]));
   const poolByMatch=new Map(matchLinks.map(l=>[String(l.match_id),l.pool_id]));
-  const participants=participantRows.map(x=>({...camel(x),poolId:poolByParticipant.get(String(x.participant_id))??null}));
+  // fixture_participants.display_name/display_code are a snapshot taken at generation time — for DOUBLES
+  // that snapshot is only ever the team code (see ensureTeams above), never the pair's player names, because
+  // ensureTeams has no such data to snapshot. participantDisplay resolves the real "Name1 / Name2" live from
+  // teams/player_profiles (the same resolver match.service.js already uses for the organizer scoring screen),
+  // so it's reused here rather than duplicated, with the stored snapshot kept as the fallback if it fails.
+  const resolvedNames=await Promise.all(participantRows.map(x=>
+    participantDisplay(db,x.participant_id,x.participant_type).catch(()=>null)));
+  const participants=participantRows.map((x,i)=>({
+    ...camel(x),
+    poolId:poolByParticipant.get(String(x.participant_id))??null,
+    displayName:resolvedNames[i]?.name||x.display_name,
+    displayCode:resolvedNames[i]?.code||x.display_code,
+  }));
   const matches=matchRows.map(x=>({...camel(x),poolId:poolByMatch.get(String(x.id))??null}));
   const out=mapFixtureRow(f,participants,matches,pools);
   return {...out,qualifiersPerPool:qualification?.qualifiers_per_pool??null,wildcardCount:qualification?.wildcard_count??0,bestThirdPlaceCount:qualification?.best_third_place_count??0,targetKnockoutBracketSize:qualification?.target_knockout_bracket_size??null,promotedToFixtureId:qualification?.promoted_to_fixture_id??null};

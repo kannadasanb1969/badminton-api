@@ -1,7 +1,7 @@
 import {withDatabase,withTransaction} from '../db/database.js';
 import * as repo from '../repositories/registration.repository.js';
 import {findById as findUser} from '../repositories/user.repository.js';
-import {findById as findPlayer} from '../repositories/player.repository.js';
+import {findById as findPlayer,findByUserId} from '../repositories/player.repository.js';
 import {RegistrationError,validateRegistrationInput,checkEligibility} from './eligibility.service.js';
 import {mapRegistrationRow} from '../mappers/registration.mapper.js';
 import {emit} from './notification.events.js';
@@ -29,6 +29,34 @@ export async function createRegistration(env,input,identity){
   const saved=await repo.insert(db,input,eventType,code);const player=await findPlayer(db,input.playerId);if(player?.user_id)await emit(db,{recipientId:player.user_id,recipientRole:'PLAYER',type:'REGISTRATION_CONFIRMED',title:'Registration confirmed',message:'Your tournament registration was successful.',tournamentId:input.tournamentId,categoryId:input.categoryId,dedupeKey:`REGISTRATION:${saved.id}`});return mapRegistrationRow(saved);
 });}
 export const listRegistrations=(env,filters={})=>withDatabase(env,async db=>(await repo.list(db,filters)).map(mapRegistrationRow));
+async function authenticatedPlayer(db,identity){
+  if(!identity)throw new RegistrationError('Authentication required',401,'UNAUTHENTICATED');
+  const user=await findUser(db,identity.sub);
+  if(!user||!user.is_active||user.role!=='PLAYER')throw new RegistrationError('Player authentication required',403,'FORBIDDEN');
+  const player=await findByUserId(db,user.id);
+  if(!player)throw new RegistrationError('Player profile not found',403,'FORBIDDEN');
+  return player;
+}
+export async function listOwnRegistrations(env,identity,scope='all'){
+  return withDatabase(env,async db=>{
+    const player=await authenticatedPlayer(db,identity);
+    const rows=await repo.list(db,{playerId:player.id});
+    if(scope!=='active')return rows.map(mapRegistrationRow);
+    return (await repo.activeRows(db,rows)).map(mapRegistrationRow);
+  });
+}
+export async function listPlayerRegistrations(env,playerId,identity){
+  return withDatabase(env,async db=>{
+    if(!identity)throw new RegistrationError('Authentication required',401,'UNAUTHENTICATED');
+    const user=await findUser(db,identity.sub);
+    if(!user||!user.is_active||!['PLAYER','ORGANIZER','ADMIN'].includes(user.role))throw new RegistrationError('Authentication required',403,'FORBIDDEN');
+    if(user.role==='PLAYER'){
+      const player=await findByUserId(db,user.id);
+      if(!player||String(player.id)!==String(playerId))throw new RegistrationError('Cannot view another player\'s registrations',403,'FORBIDDEN');
+    }
+    return (await repo.list(db,{playerId})).map(mapRegistrationRow);
+  });
+}
 export const getRegistration=(env,id)=>withDatabase(env,async db=>{const row=await repo.findById(db,id);if(!row)throw new RegistrationError('Registration not found',404,'REGISTRATION_NOT_FOUND');return mapRegistrationRow(row);});
 export function cancelRegistration(env,id,input={},identity) {return withTransaction(env,async db=>{
   if(!input||typeof input!=='object'||Array.isArray(input))throw new RegistrationError('JSON object required');

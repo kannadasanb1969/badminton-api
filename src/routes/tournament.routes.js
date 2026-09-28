@@ -14,7 +14,10 @@ export async function handleTournamentRoutes(request,env){try{
   }else if(parts.length===1&&parts[0]){
     if(request.method==='GET')return successResponse(await service.getTournament(env,parts[0]));
     if(request.method==='PUT')return successResponse(await service.updateTournament(env,parts[0],await body(request),identity));
-    // Permanent DELETE is unsupported: tournament history must be retained.
+    // Hard DELETE is intentionally scoped to pre-publication tournaments only (see
+    // tournament.service.js deleteTournament) — a published tournament's history must still be
+    // retained, and the service enforces that regardless of what this route allows through.
+    if(request.method==='DELETE')return successResponse(await service.deleteTournament(env,parts[0],identity));
   }else if(parts.length===2&&['submit','approve','reject','publish'].includes(parts[1])){
     if(request.method==='POST')return successResponse(await service.transitionTournament(env,parts[0],parts[1],await body(request),identity));
   }else if(parts.length===4&&parts[1]==='categories'&&parts[3]==='close'){
