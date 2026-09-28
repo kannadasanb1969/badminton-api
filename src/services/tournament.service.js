@@ -7,8 +7,12 @@ import {emit} from './notification.events.js';
 export class TournamentError extends Error {
   constructor(message,status=400){super(message);this.status=status;}
 }
-const fields={name:'name',description:'description',tournamentDate:'tournament_date',reportingTime:'reporting_time',registrationCloseDate:'registration_close_date',registrationCloseTime:'registration_close_time',venueName:'venue_name',venueAddress:'venue_address',mapLink:'map_link',format:'format',prizes:'prizes',shuttle:'shuttle',scoringFormat:'scoring_format'};
-const aliases={startDate:'tournamentDate',registrationEndDate:'registrationCloseDate',venue:'venueName',location:'venueAddress',fixtureFormat:'format'};
+const fields={name:'name',description:'description',tournamentDate:'tournament_date',reportingTime:'reporting_time',registrationCloseDate:'registration_close_date',registrationCloseTime:'registration_close_time',venueName:'venue_name',venueAddress:'venue_address',mapLink:'map_link',format:'format',prizes:'prizes',shuttle:'shuttle',scoringFormat:'scoring_format',registrationFee:'registration_fee',prizeType:'prize_type',winnerTrophyName:'winner_trophy_name',runnerUpTrophyName:'runner_up_trophy_name',thirdPlaceTrophyName:'third_place_trophy_name',winnerCashAmount:'winner_cash_amount',runnerUpCashAmount:'runner_up_cash_amount',thirdPlaceCashAmount:'third_place_cash_amount',thirdPlaceEnabled:'third_place_enabled'};
+const aliases={startDate:'tournamentDate',registrationEndDate:'registrationCloseDate',venue:'venueName',location:'venueAddress',fixtureFormat:'format',entryFee:'registrationFee'};
+// Money columns are `numeric` in Postgres, not strings — validated/coerced separately from the
+// generic string-or-null loop below. Kept in `fields` so insert()/update() still write them.
+const MONEY_FIELDS=['registration_fee','winner_cash_amount','runner_up_cash_amount','third_place_cash_amount'];
+const PRIZE_TYPES=['NONE','TROPHY','CASH','BOTH'];
 function object(value){if(!value || typeof value!=='object' || Array.isArray(value))throw new TournamentError('JSON object required');}
 function text(value,label){if(typeof value!=='string'||!value.trim())throw new TournamentError(`${label} is required`);return value.trim();}
 function date(value,label){
@@ -17,22 +21,45 @@ function date(value,label){
 }
 function validate(input,existing={}){
   object(input);const source={...input};
-  // Compatibility-only endDate, registrationStartDate and entryFee are ignored and returned as null.
-  // TODO: Add storage in a future migration only if the product needs persistent support.
+  // Compatibility-only endDate and registrationStartDate are ignored and returned as null — no
+  // migrated column backs them. entryFee is accepted as a legacy alias for registrationFee (see
+  // `aliases` above) and IS persisted.
   for(const key of ['status','approvedBy','approvedAt','publishedAt','submittedAt','rejectedAt','rejectedBy','rejectionReason','id','tournamentCode'])if(Object.hasOwn(source,key))throw new TournamentError(`${key} cannot be set through profile edits`);
   for(const [alias,target] of Object.entries(aliases))if(Object.hasOwn(source,alias)){
     source[target]=source[alias];
   }
-  const result=Object.fromEntries(Object.values(fields).map(k=>[k,existing[k]??null]));result.format??='KNOCKOUT';
+  const result=Object.fromEntries(Object.values(fields).map(k=>[k,existing[k]??null]));result.format??='KNOCKOUT';result.prize_type??='NONE';
   for(const [key,column] of Object.entries(fields))if(Object.hasOwn(source,key))result[column]=source[key];
   result.name=text(result.name,'name');
-  for(const [key,column] of Object.entries(fields))if(result[column]!==null&&typeof result[column]!=='string'&&!(result[column] instanceof Date))throw new TournamentError(`${key} must be a string or null`);
+  for(const [key,column] of Object.entries(fields)){
+    if(MONEY_FIELDS.includes(column)||column==='third_place_enabled')continue;
+    if(result[column]!==null&&typeof result[column]!=='string'&&!(result[column] instanceof Date))throw new TournamentError(`${key} must be a string or null`);
+  }
   if(result.tournament_date instanceof Date)result.tournament_date=result.tournament_date.toISOString().slice(0,10);
   if(result.registration_close_date instanceof Date)result.registration_close_date=result.registration_close_date.toISOString().slice(0,10);
   date(result.tournament_date,'tournamentDate');
   if(result.registration_close_date!==null){date(result.registration_close_date,'registrationCloseDate');if(result.registration_close_date>result.tournament_date)throw new TournamentError('registrationCloseDate must not be after tournamentDate');}
   for(const key of ['reporting_time','registration_close_time'])if(result[key]!==null&&!/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(result[key]))throw new TournamentError('Invalid time');
-  if(!['KNOCKOUT','LEAGUE','ROUND_ROBIN','GROUP_KNOCKOUT'].includes(result.format))throw new TournamentError('Invalid fixture format');return result;
+  if(!['KNOCKOUT','LEAGUE','ROUND_ROBIN','GROUP_KNOCKOUT'].includes(result.format))throw new TournamentError('Invalid fixture format');
+  // Registration fee: 0 = free, must always end up a non-negative number (the column is NOT NULL).
+  result.registration_fee=result.registration_fee===null||result.registration_fee===''?0:result.registration_fee;
+  for(const column of MONEY_FIELDS){
+    if(column==='registration_fee'&&result[column]===0)continue;
+    if(result[column]===null||result[column]==='')continue;
+    const n=typeof result[column]==='string'?Number(result[column]):result[column];
+    if(typeof n!=='number'||!Number.isFinite(n)||n<0)throw new TournamentError(`${column} must be a non-negative number`);
+    result[column]=Math.round(n*100)/100;
+  }
+  if(!PRIZE_TYPES.includes(result.prize_type))throw new TournamentError('prizeType must be one of NONE, TROPHY, CASH, BOTH');
+  if(result.third_place_enabled===null)result.third_place_enabled=false;
+  if(typeof result.third_place_enabled!=='boolean')throw new TournamentError('thirdPlaceEnabled must be a boolean');
+  // Prize fields are normalized (nulled) for any category the organizer's selections don't apply
+  // to, so a form's leftover/hidden values from a previous prizeType or a disabled 3rd-place
+  // toggle can never persist as stale data.
+  if(!['TROPHY','BOTH'].includes(result.prize_type)){result.winner_trophy_name=null;result.runner_up_trophy_name=null;result.third_place_trophy_name=null;}
+  if(!['CASH','BOTH'].includes(result.prize_type)){result.winner_cash_amount=null;result.runner_up_cash_amount=null;result.third_place_cash_amount=null;}
+  if(!result.third_place_enabled){result.third_place_trophy_name=null;result.third_place_cash_amount=null;}
+  return result;
 }
 function category(input,existing={}){
   object(input);const result={...existing};
@@ -87,11 +114,27 @@ export async function createTournament(env,input,identity){const data=validate(i
   await repo.lockCreation(db);const code='TRN'+(BigInt(await repo.highestCode(db))+1n).toString().padStart(6,'0');
   const row=await repo.insert(db,data,code,user);await nested(db,row.id,input);return mapped(db,row);
 });}
+// Pre-publication statuses only: this product has no user-facing Draft workflow (create already
+// lands directly on PENDING_ADMIN_APPROVAL), so PENDING_ADMIN_APPROVAL is the normal editable
+// state, not an edge case. DRAFT is kept only for the rare orphaned row left by a create that
+// never reached its automatic submit step. REJECTED stays editable so an organizer can fix and
+// have it reviewed again. Editing NEVER changes status — no resubmission step exists.
+const PRE_APPROVAL_STATUSES=['DRAFT','REJECTED','PENDING_ADMIN_APPROVAL'];
 export function updateTournament(env,id,input,identity){object(input);return withTransaction(env,async db=>{
   const row=await repo.findById(db,id,true);if(!row)throw new TournamentError('Tournament not found',404);await owner(db,row,identity);
-  if(!['DRAFT','REJECTED'].includes(row.status))throw new TournamentError('Only DRAFT or REJECTED tournaments can be edited',409);
+  if(!PRE_APPROVAL_STATUSES.includes(row.status))throw new TournamentError('Only tournaments awaiting or pending admin approval can be edited',409);
   if(input.organizerId&&input.organizerId!==row.organizer_id)throw new TournamentError('Organizer cannot be reassigned');
   const updated=await repo.update(db,id,validate(input,row));await nested(db,id,input);return mapped(db,updated);
+});}
+// Pre-publication-only hard delete: registration (eligibility.service.js: TOURNAMENT_NOT_PUBLISHED)
+// only opens once a tournament is PUBLISHED, so a tournament in one of PRE_APPROVAL_STATUSES can
+// never have real registrations/teams/fixtures/matches/results/medals yet — deleting it here
+// cannot destroy player-facing history. repo.deleteTournament still purges every tournament-linked
+// table defensively, in dependency order, in case any exist despite that guarantee.
+export function deleteTournament(env,id,identity){return withTransaction(env,async db=>{
+  const row=await repo.findById(db,id,true);if(!row)throw new TournamentError('Tournament not found',404);await owner(db,row,identity);
+  if(!PRE_APPROVAL_STATUSES.includes(row.status))throw new TournamentError('Only tournaments awaiting or pending admin approval can be deleted',409);
+  await repo.deleteTournament(db,id);return {deleted:true,id};
 });}
 export function transitionTournament(env,id,action,input,identity){object(input);return withTransaction(env,async db=>{
   const row=await repo.findById(db,id,true);if(!row)throw new TournamentError('Tournament not found',404);

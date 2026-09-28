@@ -3,7 +3,7 @@ export async function lockWrites(db) {
   await db.query('LOCK TABLE registrations IN SHARE ROW EXCLUSIVE MODE');
 }
 export async function context(db,input) {
-  const tournament=(await db.query('SELECT *, CURRENT_DATE::text AS today FROM tournaments WHERE id=$1 FOR SHARE',[input.tournamentId])).rows[0];
+  const tournament=(await db.query('SELECT *, CURRENT_DATE::text AS today, CURRENT_TIME(0)::text AS now_time FROM tournaments WHERE id=$1 FOR SHARE',[input.tournamentId])).rows[0];
   const category=(await db.query('SELECT * FROM tournament_categories WHERE id=$1 FOR SHARE',[input.categoryId])).rows[0];
   const player=(await db.query('SELECT * FROM player_profiles WHERE id=$1 FOR SHARE',[input.playerId])).rows[0];
   let partner=null;
@@ -42,6 +42,21 @@ export async function list(db,filters={}) {
   return (await db.query(`SELECT * FROM registrations WHERE ($1::text IS NULL OR tournament_id=$1)
     AND ($2::text IS NULL OR player_id=$2 OR (partner_type='FULL' AND partner_id=$2))
     AND ($3::text IS NULL OR status=$3) ORDER BY created_at DESC`,[filters.tournamentId??null,filters.playerId??null,filters.status??null])).rows;
+}
+export async function activeRows(db,rows) {
+  if(!rows.length)return [];
+  const ids=[...new Set(rows.map(row=>row.tournament_id))];
+  const completed=(await db.query(`SELECT DISTINCT m.tournament_id,m.category_id
+    FROM matches m JOIN fixtures f ON f.id=m.fixture_id
+    WHERE m.tournament_id=ANY($1::text[]) AND f.status='PUBLISHED' AND f.format='KNOCKOUT'
+      AND m.status='COMPLETED' AND m.completed_at IS NOT NULL AND m.next_match_id IS NULL
+      AND m.participant1_id IS NOT NULL AND m.participant2_id IS NOT NULL
+      AND m.participant1_id<>m.participant2_id AND m.participant1_score<>m.participant2_score
+      AND NOT EXISTS (SELECT 1 FROM matches pending WHERE pending.fixture_id=m.fixture_id AND pending.status<>'COMPLETED')
+      AND m.round_number=(SELECT MAX(r.round_number) FROM matches r WHERE r.fixture_id=m.fixture_id)
+      AND 1=(SELECT COUNT(*) FROM matches r WHERE r.fixture_id=m.fixture_id AND r.round_number=m.round_number)`,[ids])).rows;
+  const completedKeys=new Set(completed.map(row=>`${row.tournament_id}:${row.category_id}`));
+  return rows.filter(row=>['PENDING','REGISTERED','CONFIRMED'].includes(row.status)&&!completedKeys.has(`${row.tournament_id}:${row.category_id}`));
 }
 export async function cancel(db,id) {
   return (await db.query("UPDATE registrations SET status='CANCELLED',cancelled_at=NOW(),updated_at=NOW() WHERE id=$1 RETURNING *",[id])).rows[0];

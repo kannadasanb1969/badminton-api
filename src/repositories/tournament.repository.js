@@ -1,5 +1,5 @@
 // Identifiers come only from these internal allowlists, never request keys.
-const fields = ['name','description','tournament_date','reporting_time','registration_close_date','registration_close_time','venue_name','venue_address','map_link','format','prizes','shuttle','scoring_format'];
+const fields = ['name','description','tournament_date','reporting_time','registration_close_date','registration_close_time','venue_name','venue_address','map_link','format','prizes','shuttle','scoring_format','registration_fee','prize_type','winner_trophy_name','runner_up_trophy_name','third_place_trophy_name','winner_cash_amount','runner_up_cash_amount','third_place_cash_amount','third_place_enabled'];
 const categoryFields = ['name','event_type','gender_eligibility','min_age','max_age','max_teams','medalists_allowed','open_players_allowed','beginner_only','pure_beginner_only','additional_rule_notes'];
 export async function lockCreation(db) {
   await db.query('LOCK TABLE tournaments IN SHARE ROW EXCLUSIVE MODE');
@@ -67,4 +67,28 @@ export async function transition(db,id,action,actor,reason) {
   };
   const values=action==='reject'?[id,actor,reason]:action==='approve'?[id,actor]:[id];
   return (await db.query(statements[action],values)).rows[0];
+}
+// Purges every table linked to a tournament, deepest children first — there are no DB-level FK
+// constraints on tournament_id in this schema (confirmed empirically), so nothing else would clean
+// these up. Caller (tournament.service.js deleteTournament) only invokes this for tournaments in a
+// pre-publication status, where registrations/teams/fixtures/matches/results/medals are guaranteed
+// empty by the registration-eligibility rule (PUBLISHED-only) — these deletes are defensive, not
+// expected to affect rows. Never touches users/player_profiles/guest_players.
+export async function deleteTournament(db,id) {
+  await db.query('DELETE FROM notifications WHERE tournament_id=$1',[id]);
+  await db.query('DELETE FROM medal_history WHERE tournament_id=$1',[id]);
+  await db.query('DELETE FROM results WHERE tournament_id=$1',[id]);
+  await db.query('DELETE FROM match_score_history WHERE match_id IN (SELECT id FROM matches WHERE tournament_id=$1)',[id]);
+  await db.query('DELETE FROM fixture_pool_matches WHERE fixture_id IN (SELECT id FROM fixtures WHERE tournament_id=$1) OR pool_id IN (SELECT id FROM fixture_pools WHERE tournament_id=$1)',[id]);
+  await db.query('DELETE FROM fixture_pool_participants WHERE fixture_id IN (SELECT id FROM fixtures WHERE tournament_id=$1) OR pool_id IN (SELECT id FROM fixture_pools WHERE tournament_id=$1)',[id]);
+  await db.query('DELETE FROM fixture_qualification WHERE fixture_id IN (SELECT id FROM fixtures WHERE tournament_id=$1) OR promoted_to_fixture_id IN (SELECT id FROM fixtures WHERE tournament_id=$1)',[id]);
+  await db.query('DELETE FROM matches WHERE tournament_id=$1',[id]);
+  await db.query('DELETE FROM fixture_participants WHERE fixture_id IN (SELECT id FROM fixtures WHERE tournament_id=$1)',[id]);
+  await db.query('DELETE FROM fixtures WHERE tournament_id=$1',[id]);
+  await db.query('DELETE FROM fixture_pools WHERE tournament_id=$1',[id]);
+  await db.query('DELETE FROM teams WHERE tournament_id=$1',[id]);
+  await db.query('DELETE FROM registrations WHERE tournament_id=$1',[id]);
+  await db.query('DELETE FROM tournament_rules WHERE tournament_id=$1',[id]);
+  await db.query('DELETE FROM tournament_categories WHERE tournament_id=$1',[id]);
+  await db.query('DELETE FROM tournaments WHERE id=$1',[id]);
 }

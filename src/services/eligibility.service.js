@@ -19,7 +19,11 @@ export async function checkEligibility(db,input) {
   if(tournament.status!=='PUBLISHED')add('TOURNAMENT_NOT_PUBLISHED','Tournament is not open for registration');
   if(category.tournament_id!==tournament.id)add('CATEGORY_NOT_IN_TOURNAMENT','Category does not belong to this tournament');
   const date=value=>value instanceof Date?value.toISOString().slice(0,10):String(value).slice(0,10);
-  if((tournament.registration_close_date&&tournament.today>date(tournament.registration_close_date))||category.registration_phase!=='OPEN'||category.registration_closed_at)add('REGISTRATION_CLOSED','Registration has closed or is paused');
+  const closeDate=tournament.registration_close_date?date(tournament.registration_close_date):null;
+  const closeTime=tournament.registration_close_time?String(tournament.registration_close_time).slice(0,8):null;
+  const closedByDate=Boolean(closeDate&&tournament.today>closeDate);
+  const closedByTime=Boolean(closeDate&&closeTime&&tournament.today===closeDate&&String(tournament.now_time||'').slice(0,8)>=closeTime);
+  if(closedByDate||closedByTime||category.registration_phase!=='OPEN'||category.registration_closed_at)add('REGISTRATION_CLOSED','Registration has closed or is paused');
   if(!['SINGLES','DOUBLES'].includes(category.event_type))add('EVENT_TYPE_NOT_SUPPORTED','Unsupported event type');
   if(category.event_type==='SINGLES'&&input.partner)throw new RegistrationError('SINGLES cannot include a partner');
   if(category.event_type==='DOUBLES'&&!input.partner)add('PARTNER_REQUIRED','A doubles partner is required');
