@@ -13,8 +13,20 @@ const TEMP_ADMIN_MOBILE = '+918888888888';
 export class AuthError extends Error {
   constructor(message, status) { super(message); this.status = status; }
 }
+// Fail-closed by design: this is an ALLOWLIST of two independent signals that must BOTH be
+// explicitly set to a recognized non-production value, not a blocklist that only checks for the
+// literal string "production". Production's own wrangler.jsonc top-level vars (what a bare
+// `wrangler deploy` ships) set ENVIRONMENT="production" and AUTH_MODE="disabled" precisely so
+// that a missing/misconfigured var can NEVER accidentally leave the fixed OTP reachable — either
+// signal alone already blocks it. Only src/dev scripts' explicit `--var` overrides
+// (ENVIRONMENT:local, AUTH_MODE:development) unlock this path locally.
+const DEV_ENVIRONMENTS = ['local', 'development', 'test'];
+const DEV_AUTH_MODES = ['development', 'fixed'];
+function isDevelopmentAuth(env) {
+  return DEV_ENVIRONMENTS.includes(env.ENVIRONMENT) && DEV_AUTH_MODES.includes(env.AUTH_MODE);
+}
 function development(env) {
-  if (env.ENVIRONMENT === 'production' || !['development','fixed'].includes(env.AUTH_MODE)) {
+  if (!isDevelopmentAuth(env)) {
     throw new AuthError('OTP provider is not configured', 503);
   }
 }
@@ -51,7 +63,7 @@ export async function requestOtp(env,input) {
   development(env);object(input);const mobile=mobileValue(input.mobile);
   const hash=await hashOtp(FIXED_OTP);
   await withTransaction(env,async db=>{await otpStore.lockMobile(db,mobile);await otpStore.createOtp(db,mobile,hash);});
-  return {success:true,message:'OTP generated successfully',...(env.AUTH_MODE==='development'&&env.ENVIRONMENT!=='production'&&env.NODE_ENV!=='production'?{devOtp:FIXED_OTP}:{})};
+  return {success:true,message:'OTP generated successfully',...(env.AUTH_MODE==='development'&&isDevelopmentAuth(env)?{devOtp:FIXED_OTP}:{})};
 }
 export async function verifyOtp(env,input) {
   development(env);object(input);const mobile=mobileValue(input.mobile);const role=input.role==null?null:roleValue(input.role);

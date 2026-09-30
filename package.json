@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "deploy": "wrangler deploy",
-    "dev": "wrangler dev --env-file .dev.vars --var AUTH_MODE:development",
-    "start": "wrangler dev --env-file .dev.vars --var AUTH_MODE:development",
+    "dev": "wrangler dev --env-file .dev.vars --var AUTH_MODE:development --var ENVIRONMENT:local",
+    "start": "wrangler dev --env-file .dev.vars --var AUTH_MODE:development --var ENVIRONMENT:local",
     "test": "vitest",
     "db:check-target": "node scripts/check-db-target.mjs",
     "db:verify-friendly-schema": "node scripts/verify-friendly-schema.mjs",
