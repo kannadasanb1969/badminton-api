@@ -11,6 +11,7 @@ import { handlePlayerRoutes } from "./routes/player.routes.js";
 import { handleMatchRoutes } from "./routes/match.routes.js";
 import { handleResultRoutes } from "./routes/result.routes.js";
 import { handleNotificationRoutes } from "./routes/notification.routes.js";
+import { handlePlayerConnectionRoutes } from "./routes/player-connection.routes.js";
 import { corsResponse, preflight } from "./utils/cors.js";
 import { handleRealtimeRoutes } from "./routes/realtime.routes.js";
 import { MatchLiveRoom } from "./durable-objects/match-live-room.js";
@@ -31,6 +32,10 @@ export default {
 
     if (url.pathname === "/api/players" || url.pathname.startsWith("/api/players/")) {
       return respond(await handlePlayerRoutes(request, env));
+    }
+
+    if (url.pathname === "/api/connections" || url.pathname.startsWith("/api/connections/")) {
+      return respond(await handlePlayerConnectionRoutes(request, env));
     }
 
     if (url.pathname === "/api/guest-players" || url.pathname.startsWith("/api/guest-players/")) {
