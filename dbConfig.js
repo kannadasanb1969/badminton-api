@@ -11,8 +11,8 @@
 
 // ---------------- LOCAL ----------------
 
-export const DATABASE_MODE = "LOCAL";
+// export const DATABASE_MODE = "LOCAL";
 
 // ---------------- PRODUCTION ----------------
 
-// export const DATABASE_MODE = "PRODUCTION";
+export const DATABASE_MODE = "PRODUCTION";
