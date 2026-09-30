@@ -5,7 +5,8 @@ import { mapUserRow } from '../mappers/user.mapper.js';
 import { mapPlayerRow } from '../mappers/player.mapper.js';
 import { issueAccessToken } from '../utils/auth-token.js';
 
-// Development provider only. Production must install a real delivery provider.
+// Fixed OTP mode is an intentional release configuration. It never represents a real
+// delivery provider and must not expose the fixed value in its response.
 const FIXED_OTP = '12345';
 const MAX_ATTEMPTS = 5;
 // TEMPORARY ADMIN ACCESS RULE: replace with proper DB-based admin provisioning.
@@ -13,20 +14,17 @@ const TEMP_ADMIN_MOBILE = '+918888888888';
 export class AuthError extends Error {
   constructor(message, status) { super(message); this.status = status; }
 }
-// Fail-closed by design: this is an ALLOWLIST of two independent signals that must BOTH be
-// explicitly set to a recognized non-production value, not a blocklist that only checks for the
-// literal string "production". Production's own wrangler.jsonc top-level vars (what a bare
-// `wrangler deploy` ships) set ENVIRONMENT="production" and AUTH_MODE="disabled" precisely so
-// that a missing/misconfigured var can NEVER accidentally leave the fixed OTP reachable — either
-// signal alone already blocks it. Only src/dev scripts' explicit `--var` overrides
-// (ENVIRONMENT:local, AUTH_MODE:development) unlock this path locally.
+// `fixed` is explicit and may be used in production for the current release. `development`
+// remains limited to local/test environments and is the only mode that can expose devOtp.
 const DEV_ENVIRONMENTS = ['local', 'development', 'test'];
-const DEV_AUTH_MODES = ['development', 'fixed'];
 function isDevelopmentAuth(env) {
-  return DEV_ENVIRONMENTS.includes(env.ENVIRONMENT) && DEV_AUTH_MODES.includes(env.AUTH_MODE);
+  return env.AUTH_MODE === 'development' && DEV_ENVIRONMENTS.includes(env.ENVIRONMENT);
+}
+function isFixedAuth(env) {
+  return env.AUTH_MODE === 'fixed' || isDevelopmentAuth(env);
 }
 function development(env) {
-  if (!isDevelopmentAuth(env)) {
+  if (!isFixedAuth(env)) {
     throw new AuthError('OTP provider is not configured', 503);
   }
 }
