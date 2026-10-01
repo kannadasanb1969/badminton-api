@@ -1,8 +1,19 @@
 // A completed early round, unfinished sibling, or ambiguous top round is not a final.
+//
+// f.format='KNOCKOUT' alone misses a League/ROUND_ROBIN fixture that was later promoted to a
+// knockout stage (fixture.service.js promote()): promotion appends knockout-round matches into
+// the SAME fixture row rather than creating a new one, so the fixture's own format column stays
+// 'LEAGUE'/'ROUND_ROBIN' forever even once its knockout stage is genuinely complete. The second
+// branch recognizes that case via fixture_qualification.promoted_to_fixture_id (set only by
+// promote()) — everything else below (single terminal match, no pending siblings, valid
+// winner) is unchanged and still what actually proves a match is a genuine final.
 export async function completedKnockoutFinals(db, tournamentIds) {
   if (!tournamentIds.length) return [];
   return (await db.query(`SELECT m.* FROM matches m JOIN fixtures f ON f.id=m.fixture_id
-    WHERE m.tournament_id=ANY($1::text[]) AND f.status='PUBLISHED' AND f.format='KNOCKOUT'
+    WHERE m.tournament_id=ANY($1::text[]) AND f.status='PUBLISHED'
+      AND (f.format='KNOCKOUT' OR EXISTS (
+        SELECT 1 FROM fixture_qualification fq WHERE fq.fixture_id=f.id AND fq.promoted_to_fixture_id IS NOT NULL
+      ))
       AND m.status='COMPLETED' AND m.completed_at IS NOT NULL AND m.next_match_id IS NULL
       AND m.participant1_id IS NOT NULL AND m.participant2_id IS NOT NULL
       AND m.participant1_id<>m.participant2_id
