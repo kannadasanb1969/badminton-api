@@ -30,9 +30,11 @@ validateScores(a,b,m.winning_points);
 if(!isMatchCompletionEligible(a,b,m.winning_points))throw new MatchError('Completion requires a winning-point target and a two-point lead');
 if(!m.participant1_id||!m.participant2_id)throw new MatchError('Match participants are incomplete');
 const winnerId=a>b?m.participant1_id:m.participant2_id;const winnerType=a>b?m.participant1_type:m.participant2_type;const saved=await repo.updateScore(db,id,a,b,'COMPLETED',winnerId);await repo.advanceWinner(db,id,winnerId,winnerType);
-// Results and medals are awarded only after the terminal knockout match.
-const fixture=await repo.fixture(db,m.fixture_id);
-if(fixture?.format==='KNOCKOUT' && await repo.isFinalMatch(db,m)) {
+// Results and medals are awarded only after the terminal knockout match. isFinalMatch (backed by
+// completedKnockoutFinals) is already the authoritative check — including for a League/ROUND_ROBIN
+// fixture promoted to a knockout stage, whose own format column never changes — so no separate
+// format check belongs here; one existed previously and silently skipped promoted fixtures.
+if(await repo.isFinalMatch(db,m)) {
   await generateInTransaction(db,{requestedByUserId:identity.sub,tournamentId:m.tournament_id,categoryId:m.category_id});
 }
 return enriched(db,saved);});await broadcastMatchEvent(env,id,{type:'MATCH_COMPLETED',matchId:id,status:'COMPLETED',participant1Score:saved.participant1Score??0,participant2Score:saved.participant2Score??0,winningPoints:saved.winningPoints,winnerParticipantId:saved.winnerParticipantId??saved.winnerId,winnerParticipantName:saved.winnerParticipantName??null,winnerParticipantCode:saved.winnerParticipantCode??null,updatedAt:saved.updatedAt??new Date().toISOString()});return saved;};
