@@ -11,6 +11,7 @@ import { handlePlayerRoutes } from "./routes/player.routes.js";
 import { handleMatchRoutes } from "./routes/match.routes.js";
 import { handleResultRoutes } from "./routes/result.routes.js";
 import { handleNotificationRoutes } from "./routes/notification.routes.js";
+import { handleOwnerRoutes } from "./routes/owner.routes.js";
 import { handlePlayerConnectionRoutes } from "./routes/player-connection.routes.js";
 import { corsResponse, preflight } from "./utils/cors.js";
 import { handleRealtimeRoutes } from "./routes/realtime.routes.js";
@@ -32,6 +33,10 @@ export default {
 
     if (url.pathname === "/api/players" || url.pathname.startsWith("/api/players/")) {
       return respond(await handlePlayerRoutes(request, env));
+    }
+
+    if (url.pathname === "/api/owner" || url.pathname.startsWith("/api/owner/")) {
+      return respond(await handleOwnerRoutes(request, env));
     }
 
     if (url.pathname === "/api/connections" || url.pathname.startsWith("/api/connections/")) {

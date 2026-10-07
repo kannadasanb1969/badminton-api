@@ -2,7 +2,7 @@
 
 ## 1. Base URL
 
-Local Worker: `http://localhost:8787` (when running the existing Wrangler dev command).
+Local Worker: `http://localhost:8081` (when running the existing Wrangler dev command).
 
 Routes are mounted under `/api/friendly-matches` in `src/index.js`.
 

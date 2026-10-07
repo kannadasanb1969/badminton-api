@@ -1,7 +1,7 @@
 import { Client } from 'pg';
 import { getSafeDatabaseConfig } from './db-target.mjs';
 
-const BASE = 'http://localhost:8787';
+const BASE = 'http://localhost:8081';
 const tracked = { friendly: [], profiles: [], users: [] };
 const assert = (ok, msg) => { if (!ok) throw new Error(msg); };
 const dbClient = () => new Client({ connectionString: getSafeDatabaseConfig(process.env).connectionString });

@@ -1,0 +1,21 @@
+# Copy to .dev.vars for local development. Never commit real values, never paste them into chat or screenshots.
+# This file is tracked by git: it must contain PLACEHOLDERS ONLY. Real values go in .dev.vars (gitignored).
+CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE=postgres://user:password@host/db
+AUTH_TOKEN_SECRET=change-me
+
+# ---- WhatsApp fee reminders (see docs/owner-whatsapp-meta.md) ----
+#   dry-run = build and record reminders but deliver NOTHING (default; safe).
+#   meta    = send a real, approved TEMPLATE message through the Meta WhatsApp Cloud API.
+WHATSAPP_MODE=dry-run
+# dry-run only: the sender number shown for test reminders.
+WHATSAPP_SENDER_NUMBER=
+
+# meta mode only (all of these are required except the last two):
+META_WHATSAPP_ACCESS_TOKEN=
+META_WHATSAPP_PHONE_NUMBER_ID=
+META_WHATSAPP_TEMPLATE_NAME=
+META_WHATSAPP_TEMPLATE_LANGUAGE=en
+META_WHATSAPP_GRAPH_API_VERSION=
+# optional:
+META_WHATSAPP_BUSINESS_ACCOUNT_ID=
+META_WHATSAPP_DISPLAY_PHONE_NUMBER=

@@ -11,6 +11,9 @@ export async function issueAccessToken(env,user,{ttlSeconds=900}={}){
 export async function verifyAccessToken(env,token){
   if(!env.AUTH_TOKEN_SECRET||typeof token!=='string') return null;
   const [payload,sig]=token.split('.');if(!payload||!sig)return null;
-  const ok=await crypto.subtle.verify('HMAC',await key(env.AUTH_TOKEN_SECRET,'verify'),unb64(sig),encoder.encode(payload));if(!ok)return null;
-  try {const data=JSON.parse(new TextDecoder().decode(unb64(payload)));if(!data.sub||!data.role||data.exp<=Math.floor(Date.now()/1000))return null;return data;}catch{return null;}
+  // A malformed token (bad base64 etc.) is simply not authentic: return null so callers answer 401, never throw a 500.
+  try {
+    const ok=await crypto.subtle.verify('HMAC',await key(env.AUTH_TOKEN_SECRET,'verify'),unb64(sig),encoder.encode(payload));if(!ok)return null;
+    const data=JSON.parse(new TextDecoder().decode(unb64(payload)));if(!data.sub||!data.role||data.exp<=Math.floor(Date.now()/1000))return null;return data;
+  } catch {return null;}
 }
