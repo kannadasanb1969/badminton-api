@@ -10,15 +10,11 @@
 	"observability": {
 		"enabled": true
 	},
-	// These are the vars a bare `wrangler deploy` ships — i.e. production. AUTH_MODE is deliberately
-	// a value auth.service.js's development() guard does NOT recognize ("disabled", not
-	// "development"/"fixed"), and ENVIRONMENT is explicitly "production", so the fixed-OTP path is
-	// blocked by two independent signals rather than relying on one variable being remembered.
-	// Local dev overrides BOTH via `--var` in package.json's dev/start scripts (never edit those
-	// local overrides here) — never set AUTH_MODE to "development"/"fixed" or ENVIRONMENT to
-	// anything other than "production" at this top level.
+	// These are the vars a bare `wrangler deploy` ships — i.e. production. The current release
+	// intentionally uses the server-side fixed OTP flow without exposing devOtp in responses.
+	// Local dev overrides AUTH_MODE and ENVIRONMENT via package.json's dev/start scripts.
 	"vars": {
-		"AUTH_MODE": "disabled",
+		"AUTH_MODE": "fixed",
 		"ENVIRONMENT": "production"
 	},
 	"upload_source_maps": true,

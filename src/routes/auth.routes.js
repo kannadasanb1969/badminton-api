@@ -21,6 +21,16 @@ export async function handleAuthRoutes(request,env) {
       const identity=bearer?await verifyAccessToken(env,bearer):null;
       return successResponse(await auth.selectWorkspace(env,await body(request),identity));
     }
+    if(path==='/api/auth/app-handoff') {
+      if(request.method!=='POST') return errorResponse('Method not allowed',405);
+      const bearer=request.headers.get('Authorization')?.match(/^Bearer\s+(.+)$/i)?.[1];
+      const identity=bearer?await verifyAccessToken(env,bearer):null;
+      return successResponse(await auth.createAppHandoff(env,await body(request),identity));
+    }
+    if(path==='/api/auth/app-handoff/exchange') {
+      if(request.method!=='POST') return errorResponse('Method not allowed',405);
+      return successResponse(await auth.exchangeAppHandoff(env,await body(request)));
+    }
     const match=path.match(/^\/api\/users\/(?:mobile\/([^/]+)|([^/]+))$/);
     if(match) {
       if(request.method!=='GET') return errorResponse('Method not allowed',405);

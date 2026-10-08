@@ -26,3 +26,16 @@ export async function rotateSession(db, id, tokenHash) {
 export async function revokeSession(db, tokenHash) {
   await db.query('UPDATE auth_sessions SET revoked_at=COALESCE(revoked_at,NOW()),last_used_at=NOW() WHERE refresh_token_hash=$1', [tokenHash]);
 }
+
+// ----- cross-app handoff (auth_app_handoffs) -----
+// Earlier unused codes for the same user + app are retired so only the newest one can ever be exchanged.
+export async function retireOpenHandoffs(db, userId, targetApp) {
+  await db.query('UPDATE auth_app_handoffs SET consumed_at=NOW() WHERE user_id=$1 AND target_app=$2 AND consumed_at IS NULL', [userId, targetApp]);
+}
+export async function createHandoff(db, userId, targetApp, codeHash, ttlSeconds) {
+  return (await db.query("INSERT INTO auth_app_handoffs(user_id,target_app,code_hash,expires_at) VALUES($1,$2,$3,NOW()+make_interval(secs => $4::int)) RETURNING id, expires_at", [userId, targetApp, codeHash, ttlSeconds])).rows[0];
+}
+// Single atomic statement: only an unexpired, unconsumed code for this target app can be consumed, once.
+export async function consumeHandoff(db, codeHash, targetApp) {
+  return (await db.query('UPDATE auth_app_handoffs SET consumed_at=NOW() WHERE code_hash=$1 AND target_app=$2 AND consumed_at IS NULL AND expires_at > NOW() RETURNING user_id', [codeHash, targetApp])).rows[0];
+}

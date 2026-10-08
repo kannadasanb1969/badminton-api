@@ -1,7 +1,7 @@
 import { Client } from 'pg';
 import { getSafeDatabaseConfig } from './db-target.mjs';
 
-const BASE_URL = 'http://localhost:8787';
+const BASE_URL = 'http://localhost:8081';
 const tracked = { friendlyIds: [], profileIds: [], userIds: [] };
 
 function assert(condition, message) {

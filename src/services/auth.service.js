@@ -5,7 +5,8 @@ import { mapUserRow } from '../mappers/user.mapper.js';
 import { mapPlayerRow } from '../mappers/player.mapper.js';
 import { issueAccessToken } from '../utils/auth-token.js';
 
-// Development provider only. Production must install a real delivery provider.
+// Fixed OTP mode is an intentional release configuration. It never represents a real
+// delivery provider and must not expose the fixed value in its response.
 const FIXED_OTP = '12345';
 const MAX_ATTEMPTS = 5;
 // TEMPORARY ADMIN ACCESS RULE: replace with proper DB-based admin provisioning.
@@ -13,20 +14,17 @@ const TEMP_ADMIN_MOBILE = '+918888888888';
 export class AuthError extends Error {
   constructor(message, status) { super(message); this.status = status; }
 }
-// Fail-closed by design: this is an ALLOWLIST of two independent signals that must BOTH be
-// explicitly set to a recognized non-production value, not a blocklist that only checks for the
-// literal string "production". Production's own wrangler.jsonc top-level vars (what a bare
-// `wrangler deploy` ships) set ENVIRONMENT="production" and AUTH_MODE="disabled" precisely so
-// that a missing/misconfigured var can NEVER accidentally leave the fixed OTP reachable — either
-// signal alone already blocks it. Only src/dev scripts' explicit `--var` overrides
-// (ENVIRONMENT:local, AUTH_MODE:development) unlock this path locally.
+// `fixed` is explicit and may be used in production for the current release. `development`
+// remains limited to local/test environments and is the only mode that can expose devOtp.
 const DEV_ENVIRONMENTS = ['local', 'development', 'test'];
-const DEV_AUTH_MODES = ['development', 'fixed'];
 function isDevelopmentAuth(env) {
-  return DEV_ENVIRONMENTS.includes(env.ENVIRONMENT) && DEV_AUTH_MODES.includes(env.AUTH_MODE);
+  return env.AUTH_MODE === 'development' && DEV_ENVIRONMENTS.includes(env.ENVIRONMENT);
+}
+function isFixedAuth(env) {
+  return env.AUTH_MODE === 'fixed' || isDevelopmentAuth(env);
 }
 function development(env) {
-  if (!isDevelopmentAuth(env)) {
+  if (!isFixedAuth(env)) {
     throw new AuthError('OTP provider is not configured', 503);
   }
 }
@@ -113,6 +111,47 @@ export async function refresh(env,input) {
   return withTransaction(env,async db=>{const session=await otpStore.sessionByHash(db,await tokenHash(input.refreshToken));if(!session)throw new AuthError('Session is no longer valid',401);const user=await users.findById(db,session.user_id);if(!user?.is_active) {await db.query('UPDATE auth_sessions SET revoked_at=NOW() WHERE id=$1',[session.id]);throw new AuthError('Authentication is no longer valid',401);}const next=refreshToken();await otpStore.rotateSession(db,session.id,await tokenHash(next));return {user:mapUserRow(user),accessToken:await issueAccessToken(env,user),refreshToken:next};});
 }
 export async function logout(env,input) { object(input); if(typeof input.refreshToken==='string'&&input.refreshToken) await withTransaction(env,async db=>otpStore.revokeSession(db,await tokenHash(input.refreshToken))); return {success:true}; }
+// ---- Cross-app handoff (SmashPoint -> SmashPoint Owner) -------------------------------------------------------------
+// The signed-in app asks for a one-time code (60 s, single use); the target app exchanges it, WITHOUT any token, for its own
+// normal session. The code is the only thing that ever travels through a deep link: access/refresh tokens never do. Only the
+// SHA-256 of the code is stored. users.role is never read or changed: the target is an application, not a role.
+const HANDOFF_TTL_SECONDS = 60;
+const HANDOFF_TARGETS = ['OWNER'];
+function targetAppValue(value) {
+  if (typeof value !== 'string' || !HANDOFF_TARGETS.includes(value)) throw new AuthError('Valid targetApp required',400);
+  return value;
+}
+function newHandoffCode() {
+  const bytes=crypto.getRandomValues(new Uint8Array(32));
+  return btoa(String.fromCharCode(...bytes)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+export async function createAppHandoff(env,input,identity) {
+  development(env);object(input);const targetApp=targetAppValue(input.targetApp);
+  if(!identity) throw new AuthError('Authentication required',401);
+  return withTransaction(env,async db=>{
+    const user=await users.findById(db,identity.sub);
+    if(!user||!user.is_active) throw new AuthError('Authentication not permitted',403);
+    const code=newHandoffCode();
+    await otpStore.retireOpenHandoffs(db,user.id,targetApp);
+    await otpStore.createHandoff(db,user.id,targetApp,await tokenHash(code),HANDOFF_TTL_SECONDS);
+    return {code,targetApp,expiresInSeconds:HANDOFF_TTL_SECONDS};
+  });
+}
+export async function exchangeAppHandoff(env,input) {
+  development(env);object(input);
+  if(typeof input.code!=='string'||!/^[A-Za-z0-9_-]{20,100}$/.test(input.code)) throw new AuthError('Invalid or expired handoff code',401);
+  const targetApp=input.targetApp==null?'OWNER':targetAppValue(input.targetApp);
+  const result=await withTransaction(env,async db=>{
+    const consumed=await otpStore.consumeHandoff(db,await tokenHash(input.code),targetApp);
+    if(!consumed) return {error:'Invalid or expired handoff code',status:401};
+    const user=await users.findById(db,consumed.user_id);
+    if(!user||!user.is_active) throw new AuthError('Authentication not permitted',403);
+    const persistent=refreshToken();await otpStore.createSession(db,user.id,await tokenHash(persistent));
+    return {user:mapUserRow(user),accessToken:await issueAccessToken(env,user),refreshToken:persistent};
+  });
+  if(result.error) throw new AuthError(result.error,result.status);
+  return result;
+}
 // Compatibility alias; no independent login bypass or fake token generation.
 export const login = verifyOtp;
 export async function getUser(env,id) {

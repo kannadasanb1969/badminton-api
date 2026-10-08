@@ -8,8 +8,22 @@ Public tournament fields are startDate, registrationEndDate, venue, location and
 fixtureFormat; categories return gender. Requests also accept the legacy names
 tournamentDate, registrationCloseDate, venueName, venueAddress, format and
 category.genderEligibility. Frontend names take precedence when both are supplied.
-The schema has no endDate, registrationStartDate or entryFee: these request fields
-are accepted but ignored, and responses explicitly return null. They are not saved.
+The schema has no endDate or registrationStartDate: these request fields are
+accepted but ignored, and responses explicitly return null. They are not saved.
+
+Migration `20260926_tournament_prize_and_fee.sql` adds registrationFee (numeric,
+0 = free; legacy alias entryFee is still accepted on write), prizeType
+(NONE/TROPHY/CASH/BOTH), winnerTrophyName, runnerUpTrophyName,
+thirdPlaceTrophyName, winnerCashAmount, runnerUpCashAmount,
+thirdPlaceCashAmount and thirdPlaceEnabled. All are nullable/defaulted so
+existing rows keep loading unchanged (prizeType defaults 'NONE',
+registrationFee defaults 0, thirdPlaceEnabled defaults false). Trophy/cash
+fields are normalized to null server-side for any category prizeType doesn't
+select, and third-place fields are normalized to null whenever
+thirdPlaceEnabled is false, so a form's stale/hidden values can never persist.
+The legacy free-text `prizes` column is unchanged and still returned as-is for
+tournaments created before this migration; it is no longer written by new
+creates/edits, which use the structured fields above instead.
 
 Creation requires organizerId referencing an active ORGANIZER. PUT and submit
 require organizerId (the owning organizer), or adminUserId (an active ADMIN).
